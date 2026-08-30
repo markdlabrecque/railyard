@@ -24,7 +24,7 @@ jq -n --arg cmd "exec $bindir/ry-engine-stop.sh" '{hooks:{Stop:[{hooks:[{type:"c
 
 engine_cmd=${RY_ENGINE_CMD:-claude --dangerously-skip-permissions}
 # Env travels through the window command so the Stop hook can find home + id.
-cmd="export RY_HOME=$(printf %q "$home") RY_ID=$(printf %q "$id") RY_BIN=$(printf %q "$bindir"); "
+cmd="export CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false RY_HOME=$(printf %q "$home") RY_ID=$(printf %q "$id") RY_BIN=$(printf %q "$bindir"); "
 cmd+="$engine_cmd --settings $(printf %q "$settings") $(printf %q "$waybill")"
 
 ry_claude_trust "$siding"
