@@ -44,7 +44,8 @@ teardown() { pid=$(cat "$RY_HOME/state/.watch.lock" 2>/dev/null); [ -n "$pid" ] 
 @test "herdr wake: session start records HERDR_PANE_ID and watch prompts it" {
   printf 'tab-ym pane-ym yardmaster\n' >> "$RY_FAKE_HERDR_TABS"
   HERDR_PANE_ID=pane-ym run ry-session-start.sh <<<'{}'
-  [ "$(cat "$RY_HOME/state/yardmaster.herdr")" = "pane-ym" ]
+  [ "$(claim_target)" = "pane-ym" ]
+  [ "$(claim_backend)" = herdr ]
   kill "$(cat "$RY_HOME/state/.watch.lock")"
   id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
   RY_ID=$id ry-engine-stop.sh <<<"{\"transcript_path\":\"$BATS_TEST_DIRNAME/fixtures/transcript.jsonl\",\"stop_hook_active\":false}"
@@ -57,7 +58,7 @@ teardown() { pid=$(cat "$RY_HOME/state/.watch.lock" 2>/dev/null); [ -n "$pid" ] 
   HERDR_PANE_ID=pane-first ry-session-start.sh <<<'{}' >/dev/null
   HERDR_PANE_ID=pane-second run ry-session-start.sh <<<'{}'
   [[ "$output" == *"another yardmaster"* ]]
-  [ "$(cat "$RY_HOME/state/yardmaster.herdr")" = "pane-first" ]
+  [ "$(claim_target)" = "pane-first" ]
 }
 
 @test "a herdr session takes the yard when the holding pane is gone" {
@@ -67,7 +68,7 @@ teardown() { pid=$(cat "$RY_HOME/state/.watch.lock" 2>/dev/null); [ -n "$pid" ] 
   printf 'tab-second pane-second yardmaster\n' >> "$RY_FAKE_HERDR_TABS"
   HERDR_PANE_ID=pane-second run ry-session-start.sh <<<'{}'
   [[ "$output" == *"you are the yardmaster"* ]]
-  [ "$(cat "$RY_HOME/state/yardmaster.herdr")" = "pane-second" ]
+  [ "$(claim_target)" = "pane-second" ]
 }
 
 @test "ry-yard.sh --dry-run carries the herdr backend into the yardmaster" {

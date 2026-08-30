@@ -23,7 +23,7 @@ end_turn() { RY_ID=$1 ry-engine-stop.sh <<<"{\"transcript_path\":\"$T\",\"stop_h
   setup_tmux
   out="$BATS_TEST_TMPDIR/pane.out"
   tmux -L "$RY_TMUX_SOCKET" new-session -d -s ym "cat > $out"
-  tmux -L "$RY_TMUX_SOCKET" display -p -t ym '#{pane_id}' > "$RY_HOME/state/yardmaster.pane"
+  hold_yard tmux "$(tmux -L "$RY_TMUX_SOCKET" display -p -t ym '#{pane_id}')"
   end_turn "$ID"
   run ry-watch.sh --once
   [ "$status" -eq 0 ]
@@ -32,7 +32,7 @@ end_turn() { RY_ID=$1 ry-engine-stop.sh <<<"{\"transcript_path\":\"$T\",\"stop_h
 }
 
 @test "watch survives a dead pane and still writes the inbox" {
-  echo '%999' > "$RY_HOME/state/yardmaster.pane"
+  hold_yard tmux %999
   end_turn "$ID"
   run ry-watch.sh --once
   [ "$status" -eq 0 ]
