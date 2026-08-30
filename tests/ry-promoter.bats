@@ -39,7 +39,7 @@ setup() {
   [ "$status" -eq 0 ]
   [ ! -d "$RY_HOME/yard/xyz/$B" ]
   [ "$(cat "$RY_HOME/state/$B.status")" = "queued" ]
-  grep -q "engine $B blocked-stranded" "$RY_HOME/state/inbox.md"
+  grep -q "engine $B blocked-stranded: $A\$" "$RY_HOME/state/inbox.md"
   ry-watch.sh --once
   [ "$(grep -c "engine $B blocked-stranded" "$RY_HOME/state/inbox.md")" -eq 1 ]
 }

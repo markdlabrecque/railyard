@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# The manifest: the departures board of every engine grouped by status, plus the inbox count.
+# The manifest: the departures board of every task not yet decoupled, grouped by
+# status, with what each queued task waits on, plus the inbox count.
 # Read-only. usage: ry-manifest.sh
 set -euo pipefail
 # shellcheck source=bin/ry-lib.sh
 . "$(dirname "$0")/ry-lib.sh"
 home=$(ry_home); st="$home/state"
+bindir=$(cd "$(dirname "$0")" && pwd)
 
 age_of() {  # <file> -> e.g. 3m / 2h / 1d
   local s=$(( $(date +%s) - $(stat -f %m "$1" 2>/dev/null || stat -c %Y "$1") ))
@@ -13,7 +15,7 @@ age_of() {  # <file> -> e.g. 3m / 2h / 1d
   else printf '%dd' $((s/86400)); fi
 }
 
-n=0
+n=0 deps=""
 for status in queued running turn-ended pr-open merged dispatched; do
   rows=""
   for f in "$st"/*.status; do
@@ -22,11 +24,18 @@ for status in queued running turn-ended pr-open merged dispatched; do
     id=${f##*/}; id=${id%.status}
     line="  $id  $(ry_meta_get "$id" project)  $(ry_meta_get "$id" shape)  $(ry_meta_get "$id" mode)  $(age_of "$f")"
     url=$(ry_meta_get "$id" pr_url); [ -n "$url" ] && line+="  $url"
+    if [ "$status" = queued ]; then
+      deps=$("$bindir/ry-deps.sh" "$id" 2>/dev/null || true)
+      case $deps in
+        state=stranded*) line+=$'\n'"      STRANDED: ${deps#state=stranded stranded=} was dropped without merging — drop this task or release the block" ;;
+        state=pending*)  line+=$'\n'"      waiting on ${deps#state=pending pending=}" ;;
+      esac
+    fi
     [ -f "$st/$id.last.md" ] && line+=$'\n'"      $(head -n1 "$st/$id.last.md")"
     rows+="$line"$'\n'; n=$((n+1))
   done
   [ -n "$rows" ] && printf '%s\n%s' "$(tr '[:lower:]' '[:upper:]' <<<"$status")" "$rows"
 done
-[ "$n" -gt 0 ] || echo "no engines"
+[ "$n" -gt 0 ] || echo "no tasks"
 unread=0; [ -s "$st/inbox.md" ] && unread=$(grep -c . "$st/inbox.md")
 printf 'inbox: %d unread\n' "$unread"

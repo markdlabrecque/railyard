@@ -54,7 +54,7 @@ pass() {
         state=stranded*)
           if [ ! -e "$st/$id.stranded-warned" ]; then
             : > "$st/$id.stranded-warned"
-            event "$id" "blocked-stranded ${deps#state=stranded }"
+            event "$id" "blocked-stranded ${deps#state=stranded stranded=}"
           fi ;;
       esac
       continue

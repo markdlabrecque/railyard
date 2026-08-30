@@ -28,11 +28,12 @@ The SessionStart hook already recorded your tmux pane, started the watcher and p
 - project: must exist under `projects/`;
 - mode (hauls only): `local-only` (default), `pr`, or `no-mistakes`. Use the project's registered mode from `data/projects.md` when it has one.
 - base branch: resolved automatically (see `data/projects.md`); pass `--base <branch>` only when the dispatcher names one for this task.
-Split independent asks into independent engines.
+- order: a task that cannot start until another has landed names it as a **blocker** with `--after <id>`. It waits as `queued`, and the watcher couples it once every blocker is merged.
+Split independent asks into independent engines; chain dependent ones with `--after`.
 
 **Waybill.** Write the task for the engine: goal, acceptance criteria, constraints, files or areas to look at, what "verified" means. The preamble already covers commit/push/handoff rules; write only the task.
 
-**Dispatch.** `bin/ry-dispatch.sh --haul|--survey [--mode <m>] <project> "<waybill>"`. Tell the dispatcher one line: what was dispatched, the id.
+**Dispatch.** `bin/ry-dispatch.sh --haul|--survey [--mode <m>] [--after <id>[,<id>]] <project> "<waybill>"`. Tell the dispatcher one line: what was dispatched, the id, and what it waits on.
 
 **Wait.** End your turn. The watcher wakes you with `[railyard] engine <id> turn-ended: DONE|BLOCKED ...` when the engine finishes. Zero polling.
 
@@ -46,13 +47,17 @@ Split independent asks into independent engines.
 - `pr`: `bin/ry-pr.sh <id>` → the watcher wakes you on merge or failed checks.
 - survey: relay the findings; promote follow-up work into new hauls only if asked.
 
-**Decouple.** After merge/PR-merged/drop: `bin/ry-decouple.sh [--delete-branch] <id>`.
+Anything queued behind a merged task couples itself; the watcher wakes you when its engine starts.
+
+**Decouple.** After merge/PR-merged/drop: `bin/ry-decouple.sh [--delete-branch] <id>`. Decoupling a task that never merged strands whatever was queued behind it.
 
 ## Inbox
 
 `bin/ry-inbox.sh` lists unread engine events. For each line, act (review, deliver, escalate), then `bin/ry-inbox.sh --ack`. The Stop hook blocks your turn while lines are unread; that is by design.
 
 Stall lines (`engine <id> silent for Nm`) mean a running engine ended no turn: `tmux capture-pane -p -t railyard:ry-<id>` to see why, and tell the dispatcher if it needs a human.
+
+Stranded lines (`engine <id> blocked-stranded <blocker>`) mean a queued task's blocker was decoupled without merging, so its block can never lift. Bring the dispatcher the choice: drop the task, or re-dispatch it without that blocker.
 
 ## Reporting style
 
