@@ -15,7 +15,8 @@ _Avoid_: captain, user, operator
 
 **Yardmaster**:
 The main Claude Code session. Reads projects, dispatches engines, reviews their
-work, and reports to the dispatcher. Never edits a project itself.
+work, and reports to the dispatcher. Never edits a project itself. One session
+holds the yard at a time; a second one stands down rather than share the inbox.
 _Avoid_: first mate, orchestrator, main agent, supervisor
 
 **Engine**:

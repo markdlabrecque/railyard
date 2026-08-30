@@ -118,6 +118,21 @@ coupled; it becomes one inbox line and waits.
 Edges only ever point at tasks that already exist, so the graph is a DAG by
 construction and there is no cycle to detect.
 
+## Holding the yard
+
+Any Claude Code session started in this repo becomes the yardmaster: `CLAUDE.md`
+routes to `AGENTS.md`, which is the whole contract. The SessionStart hook then
+settles *which* session holds the yard, because the identity is not the scarce
+thing — the inbox is. Two yardmasters sharing one inbox take work from each
+other, and neither is told.
+
+The claim is the tmux pane the watcher nudges, in `state/yardmaster.pane`. A
+session claims it when the pane is free, already its own, or held by a pane that
+has since died. Otherwise it is told who holds the yard and stands down. A
+session with no tmux pane holds nothing: it is told the watcher cannot wake it,
+so it reads the manifest itself rather than ending its turn to wait for a nudge
+that will never come.
+
 ## Authority rules (kept from firstmate)
 
 - Yardmaster never edits projects; every change is an engine's job.

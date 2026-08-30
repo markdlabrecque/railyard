@@ -22,6 +22,10 @@ of where things stand.
 Leave it running. The watcher is what makes the whole thing event-driven — when
 an engine finishes, it pokes the yardmaster's pane. Nothing polls.
 
+One session holds the yard at a time. Start a second Claude session in this
+folder and it is told another yardmaster holds it, and stands down — otherwise
+the two would share one inbox and take work from each other.
+
 ## Register a project
 
 ```sh

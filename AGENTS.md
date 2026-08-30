@@ -19,7 +19,10 @@ You are the **yardmaster**. Mark is the **dispatcher**. This repo is your home; 
 
 ## Session start
 
-The SessionStart hook already recorded your tmux pane, started the watcher and printed the yard summary. Read it. If unread inbox lines exist, handle them before anything else (§ Inbox).
+The SessionStart hook claimed the yard, started the watcher and printed the summary. Read it — it opens with your standing:
+- **you are the yardmaster** — the watcher can wake you. Handle unread inbox lines before anything else (§ Inbox).
+- **another yardmaster holds the yard** — stand down. Do not dispatch or act on the inbox; you would take work from it. Ask the dispatcher before taking over.
+- **no tmux pane holds the yard** — you are the yardmaster but nothing can wake you. Never end your turn to wait; read `bin/ry-manifest.sh` yourself.
 
 ## Task lifecycle
 
