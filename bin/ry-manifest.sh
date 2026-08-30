@@ -14,7 +14,7 @@ age_of() {  # <file> -> e.g. 3m / 2h / 1d
 }
 
 n=0
-for status in running turn-ended pr-open merged dispatched blocked; do
+for status in queued running turn-ended pr-open merged dispatched; do
   rows=""
   for f in "$st"/*.status; do
     [ -f "$f" ] || continue

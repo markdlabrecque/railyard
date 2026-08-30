@@ -28,3 +28,12 @@ setup() { setup_home; make_project xyz; }
   [[ "$output" == *"https://g/x/-/merge_requests/3"* ]]
   [[ "$output" == *"inbox: 2 unread"* ]]
 }
+
+@test "manifest lists queued tasks" {
+  a=$(ry-dispatch.sh --haul xyz "a" | sed -n 's/^id=//p')
+  b=$(ry-dispatch.sh --haul --after "$a" xyz "b" | sed -n 's/^id=//p')
+  run ry-manifest.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *QUEUED* ]]
+  [[ "$output" == *"$b"* ]]
+}

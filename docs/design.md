@@ -86,6 +86,11 @@ railyard/
    - `pr`: `ry-pr.sh <id>` opens PR; `ry-pr-poll.sh` watches CI
 5. `ry-decouple.sh <id>`: kill window, remove worktree, archive meta.
 
+A task dispatched with `--after <id>` skips step 2's worktree and engine: it is
+recorded `queued` and waits. `ry-couple.sh <id>` does that work later, cutting
+the siding from the base branch as the clone sees it then — including a
+`local-only` blocker that was merged but never pushed.
+
 ## Authority rules (kept from firstmate)
 
 - Yardmaster never edits projects; every change is an engine's job.

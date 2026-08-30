@@ -46,3 +46,22 @@ register_project() {  # <name> <mode> [base]
     printf -- '- `%s` — %s, notes: test\n' "$name" "$mode" >> "$RY_HOME/data/projects.md"
   fi
 }
+
+# Add a commit straight onto the project's fake remote, behind the clone's back.
+remote_commit() {  # <project> <branch> <message>
+  local name=$1 branch=$2 msg=$3 remote tmp
+  remote="$BATS_TEST_TMPDIR/remote-$name.git"
+  tmp=$(mktemp -d "$BATS_TEST_TMPDIR/rc.XXXX")
+  git clone -q --branch "$branch" "$remote" "$tmp"
+  ( cd "$tmp" && git config user.email t@t && git config user.name t &&
+    echo "$msg" >> remote.txt && git add . && git commit -qm "$msg" &&
+    git push -q origin "$branch" )
+  rm -rf "$tmp"
+}
+
+# Commit in the project clone without pushing (simulates a local-only merge).
+local_commit() {  # <project> <message>
+  local name=$1 msg=$2 dir
+  dir="$RY_HOME/projects/$name"
+  ( cd "$dir" && echo "$msg" >> local.txt && git add . && git commit -qm "$msg" )
+}

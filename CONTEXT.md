@@ -86,6 +86,12 @@ _Avoid_: spawn, launch, kick off, assign
 The yardmaster's judgement of a finished engine's work against its waybill, before
 anything is delivered.
 
+**Couple**:
+To cut a task's siding and start its engine. Separate from dispatch because a
+queued task is coupled only once its blockers have landed, so its siding is cut
+from a base that already contains their work.
+_Avoid_: launch, start, spawn
+
 **Decouple**:
 To kill an engine's window, remove its siding, and archive its state. The end of a
 task's life, whatever its outcome.
@@ -106,8 +112,18 @@ used interchangeably.
 
 **Status**:
 Where a task is in its lifecycle, held in `state/<id>.status`. One of:
-`dispatched` → `running` → `turn-ended` → `merged` | `pr-open` → `decoupled`.
-Written only by the scripts.
+`queued` → `dispatched` → `running` → `turn-ended` → `merged` | `pr-open` →
+`decoupled`. Written only by the scripts.
+
+**Queued**:
+The status of a task that has a waybill but no siding and no engine, because it
+is waiting on its blockers. Coupling is what ends it.
+_Avoid_: pending, waiting, backlogged, blocked
+
+**Blocker**:
+A task that another task waits on, recorded as `after=<id>` in the waiting
+task's meta. The block lifts when the blocker is merged into the base branch.
+_Avoid_: dependency, parent, upstream
 
 **Turn-ended**:
 The status meaning an engine finished a turn and is now awaiting review. It says
