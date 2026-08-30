@@ -2,6 +2,7 @@
 # Watcher daemon. Zero tokens: pure bash polling state/ every RY_WATCH_INTERVAL
 # seconds (default 2). Each pass:
 #   (polls and stall checks run first so their events post in the same pass)
+#   0. queued tasks whose blockers have merged -> coupled (or flagged stranded)
 #   1. new lines in state/events.log -> one inbox line each, injected into the
 #      yardmaster's tmux pane (state/yardmaster.pane) when it exists;
 #   2. engines with status "running" untouched for RY_STALL_MIN minutes
@@ -33,14 +34,31 @@ post() {  # <line>: durable first, nudge second
   fi
 }
 
+event() { printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >> "$events"; }
+
 pass() {
-  # 2. stalls, 3. PR polls
-  local f id age now status last_poll
+  # 2. queued tasks, 3. stalls, 4. PR polls
+  local f id age now status last_poll deps
   now=$(date +%s)
   for f in "$st"/*.status; do
     [ -f "$f" ] || continue
     status=$(cat "$f")
     id=${f##*/}; id=${id%.status}
+    if [ "$status" = queued ]; then
+      deps=$("$bindir/ry-deps.sh" "$id" 2>>"$st/watch.log" || true)
+      case $deps in
+        state=ready*)
+          if "$bindir/ry-couple.sh" "$id" >/dev/null 2>>"$st/watch.log"; then
+            event "$id" "coupled ${deps#state=ready}"
+          fi ;;
+        state=stranded*)
+          if [ ! -e "$st/$id.stranded-warned" ]; then
+            : > "$st/$id.stranded-warned"
+            event "$id" "blocked-stranded ${deps#state=stranded }"
+          fi ;;
+      esac
+      continue
+    fi
     if [ "$status" = pr-open ]; then
       last_poll=$(cat "$st/$id.pr-polled" 2>/dev/null || echo 0)
       if [ $((now - last_poll)) -ge "$pr_poll_sec" ]; then

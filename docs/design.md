@@ -86,6 +86,10 @@ railyard/
    - `pr`: `ry-pr.sh <id>` opens PR; `ry-pr-poll.sh` watches CI
 5. `ry-decouple.sh <id>`: kill window, remove worktree, archive meta.
 
+The watcher couples queued tasks whose blockers have all merged, so a batch of
+dependent tickets runs itself down the chain with no dispatcher in the loop. A
+stranded task is never coupled; it becomes one inbox line and waits for a human.
+
 `ry-deps.sh <id>` answers whether a queued task's blockers have cleared:
 `ready`, `pending`, or `stranded` — the last meaning a blocker was decoupled
 without merging, which only the dispatcher can resolve. Decouple records the

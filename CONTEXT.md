@@ -158,8 +158,9 @@ departures board. Derived from task state, not stored.
 _Avoid_: board, bearings, backlog, dashboard, status page
 
 **Watcher**:
-The background daemon that turns events into inbox lines, wakes the yardmaster,
-polls open PRs, and flags engines that have gone silent.
+The background daemon that couples queued tasks whose blockers have merged,
+turns events into inbox lines, wakes the yardmaster, polls open PRs, and flags
+engines that have gone silent.
 _Avoid_: monitor, poller, daemon
 
 **Stranded**:
