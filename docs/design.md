@@ -12,7 +12,7 @@ scripts may be ported with attribution in the file header.
 
 In:
 - Harness: Claude Code only.
-- Backend: tmux (reference). Orca behind the same seam later.
+- Backends: tmux (reference) and Orca, behind `bin/ry-backend-lib.sh`. Orca hosts a terminal in our own siding (`orca terminal create --worktree path:<siding>`) after the project clone is registered as an Orca repo; the yardmaster is nudged via `ORCA_TERMINAL_HANDLE`.
 - Worktrees: plain `git worktree add` under `yard/<project>/<id>/`. No treehouse.
 - Delivery modes per task: `local-only` (fast-forward merge on approval),
   `pr` (open a PR, watch CI), `no-mistakes` (reserved; wired when installed).
@@ -168,7 +168,7 @@ two engines would work branches in one clone.
 4. `ry-review-diff.sh`, `ry-merge-local.sh`.
 5. `ry-pr.sh`, `ry-pr-poll.sh` (gh).
 6. AGENTS.md + skills (`/manifest`, `/allaboard`, `/shed`, `/dispatch`).
-7. Orca backend behind `RY_BACKEND`.
+7. Orca backend behind `RY_BACKEND`. Done.
 8. `no-mistakes` delivery mode.
 9. Per-project base branches; the queue (`--after`, `ry-couple.sh`,
    `ry-deps.sh`, the watcher's promoter pass). Done.

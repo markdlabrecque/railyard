@@ -7,10 +7,12 @@
 # ref chosen at queue time — that is the whole point of waiting.
 #
 # usage: ry-couple.sh <id>
-# env:   RY_BACKEND=tmux|none
+# env:   RY_BACKEND=tmux|orca|none
 set -euo pipefail
 # shellcheck source=bin/ry-lib.sh
 . "$(dirname "$0")/ry-lib.sh"
+# shellcheck source=bin/ry-backend-lib.sh
+. "$(dirname "$0")/ry-backend-lib.sh"
 case ${1:-} in -h|--help) ry_usage "$0"; exit 0 ;; esac
 
 id=${1:-}; [ -n "$id" ] || ry_die "need <id>"
@@ -41,7 +43,7 @@ mkdir -p "$home/yard/$project"
 git -C "$pdir" worktree add -q -b "$branch" "$siding" "$start"
 ry_set_status "$id" dispatched
 
-if [ "${RY_BACKEND:-tmux}" != none ]; then
+if [ "$(ry_backend)" != none ]; then
   "$(dirname "$0")/ry-engine-launch.sh" "$id" >/dev/null
 fi
 printf 'coupled %s to %s (from %s)\n' "$id" "$siding" "$start"

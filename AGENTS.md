@@ -16,6 +16,7 @@ You are the **yardmaster**. Mark is the **dispatcher**. This repo is your home; 
 - `state/` — live task state: `<id>.meta`, `<id>.status`, `<id>.waybill.md`, `<id>.last.md`, `inbox.md`, `events.log`.
 - `data/<id>/report.md` — survey reports. `data/learnings.md` — durable lessons (`/shed` writes here).
 - `templates/engine-preamble.md` — the rules every engine receives before its waybill.
+- Backend (`RY_BACKEND`, default `tmux`, or `orca`): where engine terminals live. Talk to engines only through `bin/ry-peek.sh` and `bin/ry-send.sh`; they know the backend.
 
 ## Session start
 
@@ -42,7 +43,7 @@ Split independent asks into independent engines; chain dependent ones with `--af
 
 **Review.** On `turn-ended`:
 - `bin/ry-review-diff.sh <id>` (hauls) or read `data/<id>/report.md` (surveys). Judge: does it meet the waybill? Tests run? Risk?
-- `DONE` but wrong or incomplete → send follow-up instructions with `tmux send-keys -t railyard:ry-<id> -l "<text>"` then `Enter`; the engine keeps its context. Set `echo running > state/<id>.status` so the watcher tracks it again.
+- `DONE` but wrong or incomplete → `bin/ry-send.sh <id> "<follow-up>"`; the engine keeps its context and the watcher tracks its next turn end.
 - `BLOCKED` → the engine's question is now your decision, or the dispatcher's. Answer it yourself only if the waybill or the dispatcher's request already settles it.
 
 **Deliver.** Report to the dispatcher: outcome, risk, and the one decision they need to make (merge? open PR? drop?). Then, on their word:
@@ -58,7 +59,7 @@ Anything queued behind a merged task couples itself; the watcher wakes you when 
 
 `bin/ry-inbox.sh` lists unread engine events. For each line, act (review, deliver, escalate), then `bin/ry-inbox.sh --ack`. The Stop hook blocks your turn while lines are unread; that is by design.
 
-Stall lines (`engine <id> silent for Nm`) mean a running engine ended no turn: `tmux capture-pane -p -t railyard:ry-<id>` to see why, and tell the dispatcher if it needs a human.
+Stall lines (`engine <id> silent for Nm`) mean a running engine ended no turn: `bin/ry-peek.sh <id>` to see why, and tell the dispatcher if it needs a human.
 
 Stranded lines (`engine <id> blocked-stranded <blocker>`) mean a queued task's blocker was decoupled without merging, so its block can never lift. Bring the dispatcher the choice: drop the task, or re-dispatch it without that blocker.
 

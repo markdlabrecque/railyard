@@ -4,7 +4,7 @@
 #   (polls and stall checks run first so their events post in the same pass)
 #   0. queued tasks whose blockers have merged -> coupled (or flagged stranded)
 #   1. new lines in state/events.log -> one inbox line each, injected into the
-#      yardmaster's tmux pane (state/yardmaster.pane) when it exists;
+#      yardmaster's own terminal (tmux pane or Orca handle) when known;
 #   2. engines with status "running" untouched for RY_STALL_MIN minutes
 #      (default 20) -> one "silent" inbox line, once per engine;
 #   3. engines with status "pr-open" -> ry-pr-poll.sh every RY_PR_POLL_SEC
@@ -14,8 +14,8 @@
 set -uo pipefail
 # shellcheck source=bin/ry-lib.sh
 . "$(dirname "$0")/ry-lib.sh"
-# shellcheck source=bin/ry-tmux-lib.sh
-. "$(dirname "$0")/ry-tmux-lib.sh"
+# shellcheck source=bin/ry-backend-lib.sh
+. "$(dirname "$0")/ry-backend-lib.sh"
 case ${1:-} in -h|--help) ry_usage "$0"; exit 0 ;; esac
 
 home=$(ry_home); st="$home/state"
@@ -27,12 +27,7 @@ bindir=$(cd "$(dirname "$0")" && pwd)
 
 post() {  # <line>: durable first, nudge second
   printf '%s\n' "$1" >> "$inbox"
-  local pane
-  pane=$(cat "$st/yardmaster.pane" 2>/dev/null || true)
-  [ -n "$pane" ] || return 0
-  if ry_tmux display -p -t "$pane" '#{pane_id}' >/dev/null 2>&1; then
-    ry_tmux send-keys -t "$pane" -l -- "$1" && ry_tmux send-keys -t "$pane" Enter
-  fi
+  ry_backend_nudge "$1"
 }
 
 event() { printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >> "$events"; }

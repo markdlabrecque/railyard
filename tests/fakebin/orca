@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Fake orca CLI. Logs args; answers the few commands railyard uses.
+printf 'orca %s\n' "$*" >> "$RY_FAKE_ORCA_LOG"
+case "$1 $2" in
+  "status --json") echo '{"ok":true,"result":{"runtime":{"state":"ready","reachable":true}}}' ;;
+  "repo list") printf '{"ok":true,"result":{"repos":[%s]}}\n' "$(cat "${RY_FAKE_ORCA_REPOS:-/dev/null}" 2>/dev/null)" ;;
+  "repo add") echo '{"ok":true,"result":{"repo":{"id":"repo-1"}}}' ;;
+  "terminal create") echo '{"ok":true,"result":{"terminal":{"handle":"term_fake_'"$RANDOM"'","surface":"visible"}}}' ;;
+  "terminal stop") echo '{"ok":true,"result":{"stopped":1}}' ;;
+  "terminal send") echo '{"ok":true,"result":{}}' ;;
+  "terminal read") echo '{"ok":true,"result":{"terminal":{"status":"running","tail":["line one","line two"]}}}' ;;
+  *) echo '{"ok":false,"error":{"code":"unhandled","message":"'"$*"'"}}'; exit 1 ;;
+esac

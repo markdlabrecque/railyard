@@ -65,3 +65,10 @@ local_commit() {  # <project> <message>
   dir="$RY_HOME/projects/$name"
   ( cd "$dir" && echo "$msg" >> local.txt && git add . && git commit -qm "$msg" )
 }
+
+# Orca backend: fake CLI plus the state files it reads.
+setup_orca() {
+  export RY_BACKEND=orca
+  export RY_FAKE_ORCA_LOG="$BATS_TEST_TMPDIR/orca.log" RY_FAKE_ORCA_REPOS="$BATS_TEST_TMPDIR/orca-repos.json"
+  export PATH="$BATS_TEST_DIRNAME/fakebin:$PATH"
+}

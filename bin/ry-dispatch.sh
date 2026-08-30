@@ -14,6 +14,8 @@
 set -euo pipefail
 # shellcheck source=bin/ry-lib.sh
 . "$(dirname "$0")/ry-lib.sh"
+# shellcheck source=bin/ry-backend-lib.sh
+. "$(dirname "$0")/ry-backend-lib.sh"
 
 shape="" mode="" base="" after="" project="" waybill=""
 while [ $# -gt 0 ]; do
@@ -40,6 +42,7 @@ case $shape in
           mode=none ;;
 esac
 
+ry_backend_check
 home=$(ry_home)
 pdir=$(ry_project_dir "$project")
 git -C "$pdir" fetch -q origin

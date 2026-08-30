@@ -18,7 +18,7 @@ wait_for_log() { for _ in $(seq 1 50); do [ -s "$RY_FAKE_CLAUDE_LOG" ] && return
   [[ "$args" == *"--settings $RY_HOME/state/$id.settings.json"* ]]
   [[ "$args" == *"fix the login test"* ]]
   [ "$(cat "$RY_HOME/state/$id.status")" = "running" ]
-  grep -q "^window=ry-$id$" "$RY_HOME/state/$id.meta"
+  grep -q "^target=ry-$id$" "$RY_HOME/state/$id.meta"; grep -q "^backend=tmux$" "$RY_HOME/state/$id.meta"
 }
 
 @test "engine settings file wires the Stop hook to ry-engine-stop.sh" {
@@ -62,4 +62,14 @@ wait_for_log() { for _ in $(seq 1 50); do [ -s "$RY_FAKE_CLAUDE_LOG" ] && return
   [[ "$args" == *"why is CI slow"* ]]
   [[ "$args" != *"{{"* ]]
   [ -d "$RY_HOME/data/$id" ]
+}
+
+@test "tmux peek captures the engine pane and send types into it" {
+  id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
+  echo turn-ended > "$RY_HOME/state/$id.status"
+  run ry-peek.sh "$id"
+  [ "$status" -eq 0 ]
+  run ry-send.sh "$id" "hello engine"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$RY_HOME/state/$id.status")" = "running" ]
 }
