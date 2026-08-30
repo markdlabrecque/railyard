@@ -23,9 +23,9 @@ See: a tmux session `railyard`, window `yard`, Claude starting in this repo. The
 Check it ran, either way: ask the yard `what did the railyard session start hook report?` (Claude quotes the line), or from another terminal `cat state/yardmaster.pane` shows a `%N` and `cat state/.watch.lock` shows a live pid (`kill -0 <pid>`).
 Note if: no summary line (hook did not run) or no pane file (Claude was started outside tmux).
 
-## 2. Board, empty
+## 2. Manifest, empty
 
-In the yard: `/board`
+In the yard: `/manifest`
 See: `no engines`, `inbox: 0 unread`.
 
 ## 3. Survey (read-only, no risk)
@@ -34,7 +34,7 @@ In the yard: `/dispatch <proj> investigate how tests are run in this project and
 See: one reply line: `Dispatched: survey, none, id <proj>-MMDD-HHMM-xxxx`.
 Then: `tmux select-window -t railyard:ry-<id>` (or `Ctrl-b n`) to watch the engine. It should start without a trust dialog and work read-only.
 Within ~2–5 min the yard window receives `[railyard] engine <id> turn-ended: DONE: ...`. The yardmaster reads `data/<id>/report.md`, relays findings, acks the inbox.
-Check: `bin/ry-board.sh` shows the engine under TURN-ENDED; `git -C projects/<proj> status` is clean (engine changed nothing).
+Check: `bin/ry-manifest.sh` shows the engine under TURN-ENDED; `git -C projects/<proj> status` is clean (engine changed nothing).
 Then in the yard: `decouple <id>` → siding gone, `state/archive/<id>/` exists.
 Note if: trust dialog appeared; wake line never arrived (check `state/inbox.md` and `state/watch.log`); the yardmaster edited anything itself.
 

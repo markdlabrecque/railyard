@@ -1,0 +1,144 @@
+# Railyard
+
+A personal agent distro: instructions, bash scripts, and state that turn Claude Code
+into a dispatcher running worker agents in git worktrees. The vocabulary is drawn
+from railway operations — every term below has one meaning and one spelling.
+
+## Language
+
+### People and agents
+
+**Dispatcher**:
+The human. The only authority for merging, pushing, discarding work, and
+decoupling a siding that holds uncommitted work.
+_Avoid_: captain, user, operator
+
+**Yardmaster**:
+The main Claude Code session. Reads projects, dispatches engines, reviews their
+work, and reports to the dispatcher. Never edits a project itself.
+_Avoid_: first mate, orchestrator, main agent, supervisor
+
+**Engine**:
+One worker agent, running in its own siding, working one task to a handoff.
+_Avoid_: crewmate, worker, subagent, child
+
+### Work
+
+**Task**:
+One unit of dispatched work. Has exactly one shape, one project, one engine, one
+siding, and one id.
+
+**Shape**:
+Whether a task changes code or only reads it — `haul` or `survey`. Fixed at dispatch.
+_Avoid_: kind, type
+
+**Haul**:
+A task that changes a project and delivers the change.
+_Avoid_: ship task, feature, change task
+
+**Survey**:
+A read-only investigation that produces a report and never commits or pushes.
+_Avoid_: scout task, research task, spike, investigation
+
+**Mode**:
+How a completed haul is delivered — `local-only`, `pr`, or `no-mistakes`. Applies
+to hauls only; a survey has no mode. Distinct from **Shape**.
+_Avoid_: delivery method, strategy
+
+**Waybill**:
+The task instructions handed to an engine: goal, acceptance criteria, constraints,
+areas to look at, and what "verified" means. Written by the yardmaster.
+_Avoid_: brief, prompt, ticket, spec
+
+**Report**:
+A survey's output, written to `data/<id>/report.md`. A haul produces commits, not
+a report.
+
+### Places
+
+**Project**:
+A clone of one of the dispatcher's repositories, living under `projects/`. Read by
+the yardmaster, never written by it.
+_Avoid_: repo, codebase
+
+**Siding**:
+The isolated git worktree for one task, on branch `ry/<id>`. Created at dispatch,
+removed at decouple.
+_Avoid_: worktree, workspace, branch, checkout
+
+**Yard**:
+The whole railyard installation, and the tmux session named `railyard` in which it runs.
+
+### Actions
+
+**Dispatch**:
+To create a siding and start an engine on a waybill.
+_Avoid_: spawn, launch, kick off, assign
+
+**Review**:
+The yardmaster's judgement of a finished engine's work against its waybill, before
+anything is delivered.
+
+**Decouple**:
+To kill an engine's window, remove its siding, and archive its state. The end of a
+task's life, whatever its outcome.
+_Avoid_: teardown, cleanup, close, finish
+
+**Shed**:
+The end-of-session knowledge sweep that appends durable lessons to `data/learnings.md`.
+_Avoid_: stow, retro, wrap-up
+
+**Allaboard**:
+The session recap: what happened, and which decisions are still open.
+_Avoid_: ahoy, summary, standup
+
+### Status and outcome
+
+A task's **status** and an engine's **verdict** are different things and must not be
+used interchangeably.
+
+**Status**:
+Where a task is in its lifecycle, held in `state/<id>.status`. One of:
+`dispatched` → `running` → `turn-ended` → `merged` | `pr-open` → `decoupled`.
+Written only by the scripts.
+
+**Turn-ended**:
+The status meaning an engine finished a turn and is now awaiting review. It says
+nothing about whether the work succeeded.
+_Avoid_: done, finished, complete — those describe the verdict, not the status
+
+**Verdict**:
+The engine's own judgement of its work, the first word of its final message:
+`DONE:` or `BLOCKED:`. A `DONE` verdict is a claim, not an approval — the review
+decides.
+_Avoid_: result, outcome, exit status
+
+**Blocked**:
+A verdict meaning the engine hit a question its waybill does not answer. The
+question becomes the yardmaster's decision, or the dispatcher's.
+
+### Awareness
+
+**Event**:
+One append-only line in `state/events.log` recording something that happened to a
+task: `turn-ended`, `pr-merged`, `pr-checks-failed`. The permanent record.
+
+**Inbox**:
+The unread events awaiting the yardmaster's action, in `state/inbox.md`. A line is
+unread until the yardmaster has acted on it and acknowledged it. The Stop hook
+blocks the yardmaster's turn while any line is unread.
+_Avoid_: queue, notifications, backlog
+
+**Manifest**:
+The at-a-glance digest of every task not yet decoupled — queued and in flight — a
+departures board. Derived from task state, not stored.
+_Avoid_: board, bearings, backlog, dashboard, status page
+
+**Watcher**:
+The background daemon that turns events into inbox lines, wakes the yardmaster,
+polls open PRs, and flags engines that have gone silent.
+_Avoid_: monitor, poller, daemon
+
+**Stall**:
+A task whose status is still `running` after too long with no turn end. Reported
+once, and never a status of its own.

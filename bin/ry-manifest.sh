@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The departures board: every engine grouped by status, plus the inbox count.
-# Read-only. usage: ry-board.sh
+# The manifest: the departures board of every engine grouped by status, plus the inbox count.
+# Read-only. usage: ry-manifest.sh
 set -euo pipefail
 # shellcheck source=bin/ry-lib.sh
 . "$(dirname "$0")/ry-lib.sh"

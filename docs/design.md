@@ -35,11 +35,10 @@ Out:
 | spawn          | dispatch      | start a worker                           |
 | worktree       | siding        | isolated checkout for one task           |
 | brief          | waybill       | task instructions handed to an engine    |
-| backlog        | manifest      | queued / in-flight task list             |
 | ship task      | haul          | task that changes and delivers code      |
 | scout task     | survey        | read-only investigation, report only     |
 | teardown       | decouple      | kill session, remove siding              |
-| bearings       | board         | status digest (departures board)         |
+| bearings       | manifest      | queued + in-flight tasks (departures board) |
 | stow           | shed          | end-of-session knowledge sweep           |
 | ahoy           | allaboard     | session recap / open decisions           |
 
@@ -94,6 +93,6 @@ railyard/
 3. `ry-watch.sh` daemon + yardmaster wake injection.
 4. `ry-review-diff.sh`, `ry-merge-local.sh`.
 5. `ry-pr.sh`, `ry-pr-poll.sh` (gh).
-6. AGENTS.md + skills (`/board`, `/allaboard`, `/shed`, `/dispatch`).
+6. AGENTS.md + skills (`/manifest`, `/allaboard`, `/shed`, `/dispatch`).
 7. Orca backend behind `RY_BACKEND`.
 8. `no-mistakes` delivery mode.
