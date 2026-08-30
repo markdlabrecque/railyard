@@ -46,7 +46,7 @@ start. Do not register the same project in two yards.
 
 ## Running in Orca
 
-tmux is the default; Orca and cmux are the other supported
+tmux is the default; Orca, cmux and herdr are the other supported
 **backends** — the thing that hosts terminals. Railyard still owns everything
 that matters (sidings, state, the watcher, the inbox); the backend only decides
 what window an engine appears in.
@@ -67,12 +67,12 @@ an external worktree. Decoupling stops that terminal.
 
 Nothing about the daily loop changes. The only differences:
 
-| | tmux | Orca | cmux |
-| --- | --- | --- | --- |
-| the yard | session `railyard`, window `yard` | terminal `yardmaster` | workspace `yardmaster` |
-| an engine | window `ry-<id>` | terminal `ry-<id>` | workspace `ry-<id>` |
-| the yard claim | `state/yardmaster.pane` (`$TMUX_PANE`) | `state/yardmaster.orca` (`$ORCA_TERMINAL_HANDLE`) | `state/yardmaster.cmux` (`$CMUX_WORKSPACE_ID`) |
-| shutting down | `tmux kill-session -t railyard` | close the terminals in Orca | close the workspaces in cmux |
+| | tmux | Orca | cmux | herdr |
+| --- | --- | --- | --- | --- |
+| the yard | session `railyard`, window `yard` | terminal `yardmaster` | workspace `yardmaster` | tab `yardmaster` |
+| an engine | window `ry-<id>` | terminal `ry-<id>` | workspace `ry-<id>` | tab `ry-<id>` |
+| the yard claim | `state/yardmaster.pane` (`$TMUX_PANE`) | `state/yardmaster.orca` (`$ORCA_TERMINAL_HANDLE`) | `state/yardmaster.cmux` (`$CMUX_WORKSPACE_ID`) | `state/yardmaster.herdr` (`$HERDR_PANE_ID`) |
+| shutting down | `tmux kill-session -t railyard` | close the terminals in Orca | close the workspaces in cmux | close the tabs in herdr |
 
 Use `bin/ry-peek.sh <id>` and `bin/ry-send.sh <id> "<text>"` to look at or talk
 to an engine — they read the backend out of the task's own state, so they work
@@ -103,6 +103,25 @@ Two things worth knowing:
   hosted elsewhere needs `socketControlMode` raised from `cmuxOnly` in
   `~/.config/cmux/cmux.json`; `RY_CMUX_PASSWORD` is passed through for the
   password mode.
+
+## Running in herdr
+
+```sh
+RY_BACKEND=herdr bin/ry-yard.sh
+```
+
+One herdr tab per engine, labelled `ry-<id>`, opened on its siding. Same loop,
+same commands — see the table above for what changes.
+
+Two things worth knowing:
+
+- **herdr needs its server running.** `bin/ry-yard.sh` and every dispatch check
+  `herdr status server` first and refuse early rather than half-open a task.
+  Start it by running `herdr` once.
+- **A task's `target` holds two ids**, written `tab:<tab_id>/pane:<pane_id>`.
+  The pane is what peek and send talk to; the tab is what decouple closes.
+  Nothing else in railyard has to care, but that is why the field looks
+  different from the other backends'.
 
 ## Register a project
 

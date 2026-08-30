@@ -66,7 +66,7 @@ local_commit() {  # <project> <message>
   ( cd "$dir" && echo "$msg" >> local.txt && git add . && git commit -qm "$msg" )
 }
 
-# Orca backend: fake CLI plus the state files it reads.
+# cmux backend: fake CLI plus the state files it reads.
 setup_cmux() {
   export RY_BACKEND=cmux
   export RY_FAKE_CMUX_LOG="$BATS_TEST_TMPDIR/cmux.log" RY_FAKE_CMUX_WS="$BATS_TEST_TMPDIR/cmux-ws"
@@ -77,5 +77,13 @@ setup_cmux() {
 setup_orca() {
   export RY_BACKEND=orca
   export RY_FAKE_ORCA_LOG="$BATS_TEST_TMPDIR/orca.log" RY_FAKE_ORCA_REPOS="$BATS_TEST_TMPDIR/orca-repos.json"
+  export PATH="$BATS_TEST_DIRNAME/fakebin:$PATH"
+}
+
+# herdr backend: fake CLI plus the state file it reads.
+setup_herdr() {
+  export RY_BACKEND=herdr
+  export RY_FAKE_HERDR_LOG="$BATS_TEST_TMPDIR/herdr.log" RY_FAKE_HERDR_TABS="$BATS_TEST_TMPDIR/herdr-tabs"
+  : > "$RY_FAKE_HERDR_TABS"
   export PATH="$BATS_TEST_DIRNAME/fakebin:$PATH"
 }
