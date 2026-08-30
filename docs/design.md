@@ -136,6 +136,22 @@ session with no tmux pane holds nothing: it is told the watcher cannot wake it,
 so it reads the manifest itself rather than ending its turn to wait for a nudge
 that will never come.
 
+## More than one yard
+
+A yard is a clone. `ry_home()` falls back to the repo containing `bin/`, so a
+second clone is a second yard with its own `projects/`, `yard/`, `state/`,
+watcher, claim and inbox — nothing mutable is shared, so the two cannot take
+work from each other the way two sessions in one yard can.
+
+The one thing that must be said out loud is the tmux session name:
+`RY_TMUX_SESSION` (default `railyard`). `ry-yard.sh` passes it, and the socket,
+into the yardmaster it starts, so that yardmaster's engines open windows in its
+own session rather than the first yard's. `ry-yard.sh --dry-run` prints what it
+would start.
+
+Registering the same project in two yards is not prevented, and is a bad idea:
+two engines would work branches in one clone.
+
 ## Authority rules (kept from firstmate)
 
 - Yardmaster never edits projects; every change is an engine's job.

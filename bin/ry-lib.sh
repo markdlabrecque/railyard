@@ -12,6 +12,17 @@ ry_usage() {  # <script>: print its header comment block, minus the shebang
   awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "$1"
 }
 
+ry_env_exports() {  # -> "K=v ..." the railyard vars a child session must inherit
+  # A second yard is just a second clone, but its yardmaster only stays in its
+  # own tmux session if the session (and socket) travel with it.
+  local out v
+  out="RY_HOME=$(printf %q "$(ry_home)")"
+  for v in RY_TMUX_SESSION RY_TMUX_SOCKET; do
+    if [ -n "${!v:-}" ]; then out+=" $v=$(printf %q "${!v}")"; fi
+  done
+  printf '%s\n' "$out"
+}
+
 ry_die() { printf 'error: %s\n' "$*" >&2; exit "${RY_EXIT:-1}"; }
 
 ry_new_id() {  # <project> -> e.g. xyz-0830-1412-3f9a

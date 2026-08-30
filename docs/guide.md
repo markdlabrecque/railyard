@@ -29,6 +29,20 @@ One session holds the yard at a time. Start a second Claude session in this
 folder and it is told another yardmaster holds it, and stands down — otherwise
 the two would share one inbox and take work from each other.
 
+## Running a second yard
+
+A yard is a clone. Clone railyard again and it is a separate yard — its own
+projects, sidings, state, watcher and inbox. Give it its own tmux session:
+
+```sh
+cd ~/yards/beta
+RY_TMUX_SESSION=beta bin/ry-yard.sh
+```
+
+Without that, both yards fight over the session named `railyard` and beta's
+engines open windows in alpha. `bin/ry-yard.sh --dry-run` shows what would
+start. Do not register the same project in two yards.
+
 ## Register a project
 
 ```sh
