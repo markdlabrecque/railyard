@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Fake herdr CLI. Logs args; answers the few commands railyard uses with the
+# socket API's {"id":..,"result":{..}} envelope. Tabs it has "created" live in
+# $RY_FAKE_HERDR_TABS as `<tab_id> <pane_id> <label>` lines.
+printf 'herdr %s\n' "$*" >> "$RY_FAKE_HERDR_LOG"
+tabs="${RY_FAKE_HERDR_TABS:-/dev/null}"
+
+opt() {  # <name> <args...> -> the value after --name
+  local want=$1; shift
+  while [ $# -gt 0 ]; do [ "$1" = "$want" ] && { printf '%s\n' "$2"; return; }; shift; done
+}
+err() { printf '{"id":"1","error":{"code":"unhandled","message":"%s"}}\n' "$*"; exit 1; }
+knows_pane() { grep -q " $1 " "$tabs" 2>/dev/null; }
+
+case "${1:-} ${2:-}" in
+  "status server")
+    echo '{"status":"running","running":true,"socket":"/tmp/herdr.sock"}' ;;
+  "tab create")
+    label=$(opt --label "$@")
+    n=$(wc -l < "$tabs" 2>/dev/null | tr -d ' ')
+    printf 'tab-fake-%s pane-fake-%s %s\n' "$n" "$n" "$label" >> "$tabs"
+    printf '{"id":"1","result":{"type":"tab_created","tab":{"tab_id":"tab-fake-%s","label":"%s"},"root_pane":{"pane_id":"pane-fake-%s"}}}\n' "$n" "$label" "$n" ;;
+  "tab close")
+    grep -v "^$3 " "$tabs" > "$tabs.tmp" 2>/dev/null && mv "$tabs.tmp" "$tabs"
+    printf '{"id":"1","result":{"type":"tab_closed","tab_id":"%s"}}\n' "$3" ;;
+  "pane run"|"pane send-text"|"pane send-keys")
+    printf '{"id":"1","result":{"type":"ok"}}\n' ;;
+  "pane read")
+    printf '{"id":"1","result":{"type":"pane_read","read":{"pane_id":"%s","text":"line one\\nline two\\n"}}}\n' "$3" ;;
+  "pane get")
+    knows_pane "$3" || err "no such pane $3"
+    printf '{"id":"1","result":{"type":"pane_info","pane":{"pane_id":"%s"}}}\n' "$3" ;;
+  "agent prompt")
+    # herdr only recognises agent panes; the yardmaster's is one, engines' are not
+    case $3 in pane-ym*) printf '{"id":"1","result":{"type":"agent_prompted"}}\n' ;;
+               *) err "pane $3 is not an agent" ;; esac ;;
+  *) err "$*" ;;
+esac

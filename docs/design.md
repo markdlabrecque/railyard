@@ -12,7 +12,7 @@ scripts may be ported with attribution in the file header.
 
 In:
 - Harness: Claude Code only.
-- Backends: tmux (reference), Orca and cmux, behind `bin/ry-backend-lib.sh`. Orca hosts a terminal in our own siding (`orca terminal create --worktree path:<siding>`) after the project clone is registered as an Orca repo; the yardmaster is nudged via `ORCA_TERMINAL_HANDLE`.
+- Backends: tmux (reference), Orca, cmux and herdr, behind `bin/ry-backend-lib.sh`. Orca hosts a terminal in our own siding (`orca terminal create --worktree path:<siding>`) after the project clone is registered as an Orca repo; the yardmaster is nudged via `ORCA_TERMINAL_HANDLE`.
 - Worktrees: plain `git worktree add` under `yard/<project>/<id>/`. No treehouse.
 - Delivery modes per task: `local-only` (fast-forward merge on approval),
   `pr` (open a PR, watch CI), `no-mistakes` (reserved; wired when installed).
@@ -182,6 +182,16 @@ stable uuid, looked up by the title we gave the workspace. And its control
 socket only accepts callers started inside cmux — which a cmux-hosted yard
 already is, because the watcher inherits `CMUX_SOCKET_PASSWORD` from the
 yardmaster that spawned it.
+
+herdr is the same shape again, one tab per engine (`tab create --cwd <siding>
+--label ry-<id>`, then `pane run` to start the engine in that tab's root pane).
+It is the only backend whose terminal needs two ids: the pane is what you read
+and type into, the tab is what you close. Rather than teach the rest of
+railyard about a second id, both travel in the one `target=` field as
+`tab:<tab_id>/pane:<pane_id>`. Every herdr command answers with the socket
+API's JSON envelope, so nothing is screen-scraped, and `agent prompt` handles
+Claude's bracketed-paste semantics when herdr has recognised the pane as an
+agent — a pane it has not takes literal text plus Enter instead.
 
 ## Authority rules (kept from firstmate)
 

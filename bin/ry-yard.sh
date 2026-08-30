@@ -28,9 +28,12 @@ case $(ry_backend) in
   cmux)
     ws=$(ry_cmux_open yardmaster "$home" "$cmd")
     echo "yardmaster opened in cmux: $ws" ;;
+  herdr)
+    t=$(ry_herdr_open yardmaster "$home" "$cmd")
+    echo "yardmaster opened in herdr: $t" ;;
   orca)
     ry_orca_ensure_repo "$home"
     out=$(orca terminal create --worktree "path:$home" --title yardmaster --command "$cmd" --focus --json)
     ry_orca_ok "$out"; echo "yardmaster opened in Orca: $(jq -r '.result.terminal.handle' <<<"$out")" ;;
-  *) ry_die "ry-yard.sh supports tmux, orca or cmux" ;;
+  *) ry_die "ry-yard.sh supports tmux, orca, cmux or herdr" ;;
 esac
