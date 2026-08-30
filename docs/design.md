@@ -74,35 +74,49 @@ railyard/
 
 1. You: "fix the flaky login test in xyz".
 2. Yardmaster runs `ry-dispatch.sh --haul --mode pr xyz "<waybill>"`:
-   - `git worktree add yard/xyz/<id> -b ry/<id>` from fresh default branch
+   - `git worktree add yard/xyz/<id> -b ry/<id>` from the fresh base branch
    - writes `state/<id>.meta`, `state/<id>.status=running`
    - opens tmux window `ry-<id>`, cwd = siding, runs `claude -p` with the
-     waybill; the engine's Stop hook writes `state/<id>.status=done|blocked`
+     waybill; the engine's Stop hook writes `state/<id>.status=turn-ended`
 3. `ry-watch.sh` (daemon, started by SessionStart hook) sees the status
    change and injects one line into the yardmaster's tmux pane:
-   `engine <id> done: <one-line summary>`.
+   `engine <id> turn-ended: <one-line summary>`.
 4. Yardmaster reviews the diff (`ry-review-diff.sh <id>`), then per mode:
    - `local-only`: asks you, then `ry-merge-local.sh <id>` (ff-only)
    - `pr`: `ry-pr.sh <id>` opens PR; `ry-pr-poll.sh` watches CI
 5. `ry-decouple.sh <id>`: kill window, remove worktree, archive meta.
 
-The watcher couples queued tasks whose blockers have all merged, so a batch of
-dependent tickets runs itself down the chain with no dispatcher in the loop. A
-stranded task is never coupled; it becomes one inbox line and waits for a human.
+## The queue
 
-`ry-deps.sh <id>` answers whether a queued task's blockers have cleared:
-`ready`, `pending`, or `stranded` — the last meaning a blocker was decoupled
-without merging, which only the dispatcher can resolve. Decouple records the
-status it archived as `outcome=` in the meta, so a blocker that merged before
-being decoupled still reads as merged.
+A batch of tickets is rarely independent. `--after <id>[,<id>...]` on dispatch
+records those ids as the task's **blockers**: it skips step 2's worktree and
+engine, is recorded `queued`, and waits.
+
+A block lifts when its blocker is **merged into the base branch**, never when
+the blocker's engine finishes. A `DONE` verdict is the engine's claim; the merge
+is the fact. This keeps the queue inside the authority rules — nothing proceeds
+on unapproved work — at the cost of a batch pausing until the dispatcher says
+merge.
+
+`ry-couple.sh <id>` cuts the siding when the block lifts. It reads the base
+branch as the clone sees it *then*, which is the whole point of waiting: cutting
+at queue time would branch off a stale base and silently miss the work the task
+depends on. It prefers the clone's own base branch when that is ahead of origin,
+so a `local-only` blocker merged but never pushed is included, and refuses to
+guess when the two have diverged.
+
+`ry-deps.sh <id>` answers whether the blockers have cleared: `ready`, `pending`,
+or `stranded`. Stranded means a blocker was decoupled without ever merging, so
+the block can never lift on its own — the one case that needs a human. Decouple
+records the status it archived as `outcome=` in the meta, without which
+archiving would erase whether a blocker had merged.
+
+The watcher couples every `ready` queued task on each pass, so a chain runs
+itself down its length with no dispatcher in the loop. A stranded task is never
+coupled; it becomes one inbox line and waits.
 
 Edges only ever point at tasks that already exist, so the graph is a DAG by
 construction and there is no cycle to detect.
-
-A task dispatched with `--after <id>` skips step 2's worktree and engine: it is
-recorded `queued` and waits. `ry-couple.sh <id>` does that work later, cutting
-the siding from the base branch as the clone sees it then — including a
-`local-only` blocker that was merged but never pushed.
 
 ## Authority rules (kept from firstmate)
 
@@ -122,3 +136,5 @@ the siding from the base branch as the clone sees it then — including a
 6. AGENTS.md + skills (`/manifest`, `/allaboard`, `/shed`, `/dispatch`).
 7. Orca backend behind `RY_BACKEND`.
 8. `no-mistakes` delivery mode.
+9. Per-project base branches; the queue (`--after`, `ry-couple.sh`,
+   `ry-deps.sh`, the watcher's promoter pass). Done.

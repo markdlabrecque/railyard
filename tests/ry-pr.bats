@@ -94,3 +94,25 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   RY_PR_POLL_SEC=3600 run ry-watch.sh --once
   [ "$(grep -c "mr view" "$RY_FAKE_FORGE_LOG")" -eq 1 ]
 }
+
+@test "watch polls again once the interval has elapsed" {
+  RY_FORGE=gitlab ry-pr.sh "$ID" >/dev/null
+  echo '{"state":"opened","head_pipeline":{"status":"running"}}' > "$RY_FAKE_GLAB_VIEW"
+  RY_PR_POLL_SEC=120 ry-watch.sh --once
+  [ "$(grep -c "mr view" "$RY_FAKE_FORGE_LOG")" -eq 1 ]
+  RY_PR_POLL_SEC=120 ry-watch.sh --once
+  [ "$(grep -c "mr view" "$RY_FAKE_FORGE_LOG")" -eq 1 ]
+  # wind the clock back past the interval; the next pass must poll again
+  printf '%s\n' "$(( $(date +%s) - 121 ))" > "$RY_HOME/state/$ID.pr-polled"
+  RY_PR_POLL_SEC=120 ry-watch.sh --once
+  [ "$(grep -c "mr view" "$RY_FAKE_FORGE_LOG")" -eq 2 ]
+}
+
+@test "watch turns failing checks into one inbox line with the url" {
+  RY_FORGE=gitlab ry-pr.sh "$ID" >/dev/null
+  echo '{"state":"opened","head_pipeline":{"status":"failed"}}' > "$RY_FAKE_GLAB_VIEW"
+  RY_PR_POLL_SEC=0 ry-watch.sh --once
+  grep -q "engine $ID pr-checks-failed: https://gitlab.example.com/grp/sub/r/-/merge_requests/12" "$RY_HOME/state/inbox.md"
+  RY_PR_POLL_SEC=0 ry-watch.sh --once
+  [ "$(grep -c "pr-checks-failed" "$RY_HOME/state/inbox.md")" -eq 1 ]
+}
