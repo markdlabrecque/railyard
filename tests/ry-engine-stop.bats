@@ -13,7 +13,8 @@ setup() {
   [ "$status" -eq 0 ]
   [ "$(cat "$RY_HOME/state/$ID.status")" = "turn-ended" ]
   grep -q " $ID turn-ended$" "$RY_HOME/state/events.log"
-  [ "$(cat "$RY_HOME/state/$ID.last.md")" = "Done: fixed the flaky test in login.spec.ts." ]
+  [ "$(head -n1 "$RY_HOME/state/$ID.last.md")" = "DONE: added HELLO.md and committed it." ]
+  [ "$(tail -n1 "$RY_HOME/state/$ID.last.md")" = "- Nothing pushed." ]
 }
 
 @test "stop hook is a no-op when stop_hook_active is true" {

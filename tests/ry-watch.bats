@@ -14,7 +14,7 @@ end_turn() { RY_ID=$1 ry-engine-stop.sh <<<"{\"transcript_path\":\"$T\",\"stop_h
   end_turn "$ID"
   run ry-watch.sh --once
   [ "$status" -eq 0 ]
-  grep -q "engine $ID turn-ended: Done: fixed the flaky test in login.spec.ts." "$RY_HOME/state/inbox.md"
+  grep -q "engine $ID turn-ended: DONE: added HELLO.md and committed it.$" "$RY_HOME/state/inbox.md"
   run ry-watch.sh --once
   [ "$(grep -c "$ID" "$RY_HOME/state/inbox.md")" -eq 1 ]
 }
