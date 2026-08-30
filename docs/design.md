@@ -39,7 +39,7 @@ Out:
 | ship task      | haul          | task that changes and delivers code      |
 | scout task     | survey        | read-only investigation, report only     |
 | teardown       | decouple      | kill session, remove siding              |
-| bearings       | switchlist    | status digest                            |
+| bearings       | board         | status digest (departures board)         |
 | stow           | shed          | end-of-session knowledge sweep           |
 | ahoy           | allaboard     | session recap / open decisions           |
 
@@ -54,7 +54,7 @@ railyard/
   bin/                 ry-*.sh scripts, one job each, *-lib.sh for shared code
   .claude/
     settings.json      hooks: SessionStart -> ry-session-start, Stop -> ry-turnend-guard
-    skills/            /switchlist /shed /allaboard /dispatch
+    skills/            /board /shed /allaboard /dispatch
   projects/            clones of your repos (gitignored)
   yard/                worktrees: yard/<project>/<id>/ (gitignored)
   data/                durable: projects.md, dispatcher.md, learnings.md, <id>/report.md
@@ -94,6 +94,6 @@ railyard/
 3. `ry-watch.sh` daemon + yardmaster wake injection.
 4. `ry-review-diff.sh`, `ry-merge-local.sh`.
 5. `ry-pr.sh`, `ry-pr-poll.sh` (gh).
-6. AGENTS.md + skills (`/switchlist`, `/allaboard`, `/shed`).
+6. AGENTS.md + skills (`/board`, `/allaboard`, `/shed`, `/dispatch`).
 7. Orca backend behind `RY_BACKEND`.
 8. `no-mistakes` delivery mode.

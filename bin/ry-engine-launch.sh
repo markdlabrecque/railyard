@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Launch the engine for a dispatched id in the configured backend.
-# Writes state/<id>.settings.json (Claude hooks: Stop -> ry-engine-stop.sh),
+# Builds the prompt from templates/engine-preamble.md + the waybill, writes
+# state/<id>.settings.json (Claude hooks: Stop -> ry-engine-stop.sh),
 # pre-trusts the siding in ~/.claude.json (RY_CLAUDE_JSON overrides) so no
 # trust dialog blocks the engine, opens the backend window, marks running.
 #
@@ -17,7 +18,13 @@ home=$(ry_home)
 bindir=$(cd "$(dirname "$0")" && pwd)
 siding=$(ry_meta_get "$id" siding)
 [ -d "$siding" ] || ry_die "siding $siding missing"
-waybill=$(cat "$home/state/$id.waybill.md")
+shape=$(ry_meta_get "$id" shape); branch=$(ry_meta_get "$id" branch)
+report="$home/data/$id/report.md"; mkdir -p "$home/data/$id"
+# Prompt = templates/engine-preamble.md with placeholders filled, waybill last.
+prompt=$(awk -v id="$id" -v shape="$shape" -v branch="$branch" -v report="$report" -v wb="$home/state/$id.waybill.md" '
+  /\{\{waybill\}\}/ { while ((getline l < wb) > 0) print l; next }
+  { gsub(/\{\{id\}\}/, id); gsub(/\{\{shape\}\}/, shape); gsub(/\{\{branch\}\}/, branch); gsub(/\{\{report\}\}/, report); print }
+' "$bindir/../templates/engine-preamble.md")
 settings="$home/state/$id.settings.json"
 
 jq -n --arg cmd "exec $bindir/ry-engine-stop.sh" '{hooks:{Stop:[{hooks:[{type:"command",command:$cmd}]}]}}' > "$settings"
@@ -25,7 +32,7 @@ jq -n --arg cmd "exec $bindir/ry-engine-stop.sh" '{hooks:{Stop:[{hooks:[{type:"c
 engine_cmd=${RY_ENGINE_CMD:-claude --dangerously-skip-permissions}
 # Env travels through the window command so the Stop hook can find home + id.
 cmd="export CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false RY_HOME=$(printf %q "$home") RY_ID=$(printf %q "$id") RY_BIN=$(printf %q "$bindir"); "
-cmd+="$engine_cmd --settings $(printf %q "$settings") $(printf %q "$waybill")"
+cmd+="$engine_cmd --settings $(printf %q "$settings") $(printf %q "$prompt")"
 
 ry_claude_trust "$siding"
 

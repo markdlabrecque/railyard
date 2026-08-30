@@ -13,7 +13,7 @@ wait_for_log() { for _ in $(seq 1 50); do [ -s "$RY_FAKE_CLAUDE_LOG" ] && return
   tmux -L "$RY_TMUX_SOCKET" list-windows -t railyard -F '#W' | grep -qx "ry-$id"
   wait_for_log
   [ "$(sed -n 1p "$RY_FAKE_CLAUDE_LOG")" = "$RY_HOME/yard/xyz/$id" ]
-  args=$(sed -n 2p "$RY_FAKE_CLAUDE_LOG")
+  args=$(sed -n '2,$p' "$RY_FAKE_CLAUDE_LOG")
   [[ "$args" == *"--dangerously-skip-permissions"* ]]
   [[ "$args" == *"--settings $RY_HOME/state/$id.settings.json"* ]]
   [[ "$args" == *"fix the login test"* ]]
@@ -51,4 +51,15 @@ wait_for_log() { for _ in $(seq 1 50); do [ -s "$RY_FAKE_CLAUDE_LOG" ] && return
   export RY_CLAUDE_JSON="$BATS_TEST_TMPDIR/new.json"
   id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
   jq -e --arg p "$RY_HOME/yard/xyz/$id" '.projects[$p].hasTrustDialogAccepted == true' "$RY_CLAUDE_JSON"
+}
+
+@test "engine prompt = preamble with id/branch/report filled in + waybill" {
+  id=$(ry-dispatch.sh --survey xyz "why is CI slow" | sed -n 's/^id=//p')
+  for _ in $(seq 1 50); do [ -s "$RY_FAKE_CLAUDE_LOG" ] && break; sleep 0.1; done
+  args=$(sed -n '2,$p' "$RY_FAKE_CLAUDE_LOG")
+  [[ "$args" == *"ry/$id"* ]]
+  [[ "$args" == *"$RY_HOME/data/$id/report.md"* ]]
+  [[ "$args" == *"why is CI slow"* ]]
+  [[ "$args" != *"{{"* ]]
+  [ -d "$RY_HOME/data/$id" ]
 }
