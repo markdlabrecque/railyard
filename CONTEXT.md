@@ -66,6 +66,13 @@ The isolated git worktree for one task, on branch `ry/<id>`. Created at dispatch
 removed at decouple.
 _Avoid_: worktree, workspace, branch, checkout
 
+**Base branch**:
+The branch a project's sidings are cut from and merged back into — `develop` by
+default. Resolved from `--base`, then the project's `data/projects.md` line, then
+`develop` if the project has one, then the remote's default branch. Railyard
+never touches the release branch; releases are cut outside it.
+_Avoid_: default branch, target branch, trunk, main
+
 **Yard**:
 The whole railyard installation, and the tmux session named `railyard` in which it runs.
 

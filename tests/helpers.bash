@@ -11,7 +11,8 @@ setup_home() {
 # Create a fake "remote" and clone it into projects/<name> so default-branch
 # detection via origin works.
 make_project() {
-  local name=$1 remote="$BATS_TEST_TMPDIR/remote-$name.git"
+  local name=$1 remote
+  remote="$BATS_TEST_TMPDIR/remote-$name.git"
   git init -q --bare -b main "$remote"
   git clone -q "$remote" "$RY_HOME/projects/$name" 2>/dev/null
   ( cd "$RY_HOME/projects/$name" &&
@@ -27,3 +28,21 @@ setup_tmux() {
   export PATH="$BATS_TEST_DIRNAME/fakebin:$PATH"
 }
 teardown_tmux() { tmux -L "$RY_TMUX_SOCKET" kill-server 2>/dev/null || true; }
+
+# Add a branch to a project's fake remote (and fetch it into the clone).
+make_branch() {
+  local name=$1 branch=$2 dir
+  dir="$RY_HOME/projects/$name"
+  ( cd "$dir" && git push -q origin "HEAD:refs/heads/$branch" && git fetch -q origin )
+}
+
+# Register a project line in data/projects.md.
+register_project() {  # <name> <mode> [base]
+  local name=$1 mode=$2 base=${3:-}
+  mkdir -p "$RY_HOME/data"
+  if [ -n "$base" ]; then
+    printf -- '- `%s` — %s, base: %s, notes: test\n' "$name" "$mode" "$base" >> "$RY_HOME/data/projects.md"
+  else
+    printf -- '- `%s` — %s, notes: test\n' "$name" "$mode" >> "$RY_HOME/data/projects.md"
+  fi
+}

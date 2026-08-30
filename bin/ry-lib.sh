@@ -33,6 +33,20 @@ ry_default_branch() {  # <project_dir> -> main/master/...
   printf '%s\n' "${ref#origin/}"
 }
 
+ry_project_base() {  # <project> -> branch sidings are cut from and merged back into
+  # Order: `base:` on the project's data/projects.md line, then develop when the
+  # project has one, then the remote's default branch.
+  local name=$1 home pdir line b
+  home=$(ry_home); pdir="$home/projects/$name"
+  line=$(grep -m1 -E "^- .$name. " "$home/data/projects.md" 2>/dev/null || true)
+  b=$(sed -n 's/.*base: *\([A-Za-z0-9._/-][A-Za-z0-9._/-]*\).*/\1/p' <<<"$line")
+  if [ -n "$b" ]; then printf '%s\n' "$b"; return; fi
+  if git -C "$pdir" rev-parse --verify -q refs/remotes/origin/develop >/dev/null 2>&1; then
+    printf 'develop\n'; return
+  fi
+  ry_default_branch "$pdir"
+}
+
 ry_meta_get() {  # <id> <key>
   local home; home=$(ry_home)
   [ -f "$home/state/$1.meta" ] || ry_die "unknown id '$1'"

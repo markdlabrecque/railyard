@@ -27,6 +27,7 @@ The SessionStart hook already recorded your tmux pane, started the watcher and p
 - shape: `--haul` (changes code) or `--survey` (read-only, produces a report);
 - project: must exist under `projects/`;
 - mode (hauls only): `local-only` (default), `pr`, or `no-mistakes`. Use the project's registered mode from `data/projects.md` when it has one.
+- base branch: resolved automatically (see `data/projects.md`); pass `--base <branch>` only when the dispatcher names one for this task.
 Split independent asks into independent engines.
 
 **Waybill.** Write the task for the engine: goal, acceptance criteria, constraints, files or areas to look at, what "verified" means. The preamble already covers commit/push/handoff rules; write only the task.

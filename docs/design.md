@@ -44,6 +44,14 @@ Out:
 
 Script prefix: `ry-`. Env prefix: `RY_`. Home: the repo root (`RY_HOME`).
 
+## Base branches
+
+Sidings are cut from, and merged back into, a project's **base branch** —
+`develop` by default. Resolution order: `--base` on dispatch, then `base:` on
+the project's `data/projects.md` line, then `develop` if the project has one,
+then the remote's default branch. Railyard never touches the release branch;
+releases are cut outside it and are not represented here.
+
 ## Layout
 
 ```
