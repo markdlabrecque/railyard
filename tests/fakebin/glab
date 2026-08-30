@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+printf 'glab %s\n' "$*" >> "$RY_FAKE_FORGE_LOG"
+case "$1 $2" in
+  "mr create") echo "https://gitlab.example.com/grp/sub/r/-/merge_requests/12" ;;
+  "mr view")   cat "$RY_FAKE_GLAB_VIEW" ;;
+  *) echo "fake glab: unhandled $*" >&2; exit 1 ;;
+esac

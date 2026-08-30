@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+printf 'gh %s\n' "$*" >> "$RY_FAKE_FORGE_LOG"
+case "$1 $2" in
+  "pr create") echo "https://github.com/o/r/pull/7" ;;
+  "pr view")   cat "$RY_FAKE_GH_VIEW" ;;
+  *) echo "fake gh: unhandled $*" >&2; exit 1 ;;
+esac
