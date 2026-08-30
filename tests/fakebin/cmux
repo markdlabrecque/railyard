@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Fake cmux CLI. Logs args; answers the few commands railyard uses.
+# Workspaces it has "created" live in $RY_FAKE_CMUX_WS as `<uuid> <title>` lines.
+printf 'cmux %s\n' "$*" >> "$RY_FAKE_CMUX_LOG"
+ws="${RY_FAKE_CMUX_WS:-/dev/null}"
+
+# strip the global presentation flags railyard passes before the command
+args=(); while [ $# -gt 0 ]; do
+  case $1 in
+    --json) shift ;;
+    --id-format) shift 2 ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+set -- "${args[@]}"
+
+opt() {  # <name> <args...> -> the value after --name
+  local want=$1; shift
+  while [ $# -gt 0 ]; do [ "$1" = "$want" ] && { printf '%s\n' "$2"; return; }; shift; done
+}
+
+case ${1:-} in
+  ping) echo "OK" ;;
+  new-workspace)
+    title=$(opt --name "$@")
+    uuid="ws-fake-$(wc -l < "$ws" 2>/dev/null | tr -d ' ')"
+    printf '%s %s\n' "$uuid" "$title" >> "$ws"
+    echo "OK workspace:1" ;;
+  list-workspaces)
+    printf '{"workspaces":['
+    sep=""
+    while read -r id title; do
+      printf '%s{"id":"%s","ref":"workspace:1","title":"%s"}' "$sep" "$id" "$title"; sep=","
+    done < "$ws" 2>/dev/null
+    printf ']}\n' ;;
+  close-workspace)
+    id=$(opt --workspace "$@")
+    grep -v "^$id " "$ws" > "$ws.tmp" 2>/dev/null && mv "$ws.tmp" "$ws"
+    echo "OK" ;;
+  read-screen) printf 'line one\nline two\n' ;;
+  send|send-key) echo "OK" ;;
+  *) echo "Error: unhandled $*" >&2; exit 1 ;;
+esac

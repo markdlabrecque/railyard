@@ -28,7 +28,8 @@ teardown() { pid=$(cat "$RY_HOME/state/.watch.lock" 2>/dev/null); [ -n "$pid" ] 
 
 @test "orca wake: session start records ORCA_TERMINAL_HANDLE and watch sends to it" {
   ORCA_TERMINAL_HANDLE=term_ym run ry-session-start.sh <<<'{}'
-  [ "$(cat "$RY_HOME/state/yardmaster.orca")" = "term_ym" ]
+  [ "$(claim_target)" = "term_ym" ]
+  [ "$(claim_backend)" = orca ]
   kill "$(cat "$RY_HOME/state/.watch.lock")"
   id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
   RY_ID=$id ry-engine-stop.sh <<<"{\"transcript_path\":\"$BATS_TEST_DIRNAME/fixtures/transcript.jsonl\",\"stop_hook_active\":false}"

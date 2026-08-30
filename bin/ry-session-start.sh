@@ -4,10 +4,12 @@
 # session context.
 #
 # One session holds the yard at a time. The claim is the terminal the watcher
-# nudges to wake it — a tmux pane or an Orca handle, whichever the backend
-# uses. A session that starts while another live terminal holds the yard is
-# told so rather than silently stealing it: two yardmasters share one inbox and
-# take work from each other.
+# nudges to wake it, recorded in state/yardmaster.claim as the backend plus the
+# terminal id within it. A session that starts while another live terminal
+# holds the yard is told so rather than silently stealing it: two yardmasters
+# share one inbox and take work from each other. Because the claim names its
+# backend, a session that starts on a different backend from the one holding
+# the yard is told that too, instead of quietly claiming alongside it.
 # usage: Claude SessionStart hook, run from the railyard home.
 set -uo pipefail
 # shellcheck source=bin/ry-lib.sh
@@ -19,15 +21,17 @@ home=$(ry_home); st="$home/state"; bindir=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$st"
 cat >/dev/null || true   # drain hook stdin
 
-claim=$(ry_backend_claim_file); self=$(ry_backend_self)
-held=$(cat "$claim" 2>/dev/null || true)
-if [ -n "$held" ] && ! ry_backend_alive "$held"; then
-  held=""   # the terminal that held the yard is gone
+backend=$(ry_backend); self=$(ry_backend_self)
+held_backend=$(ry_claim_get backend); held=$(ry_claim_get target)
+if [ -n "$held" ] && ! ry_claim_alive "$held_backend" "$held"; then
+  held=""; held_backend=""   # the terminal that held the yard is gone
 fi
 
-if [ -n "$self" ] && { [ -z "$held" ] || [ "$held" = "$self" ]; }; then
-  printf '%s\n' "$self" > "$claim"
+if [ -n "$self" ] && { [ -z "$held" ] || { [ "$held" = "$self" ] && [ "$held_backend" = "$backend" ]; }; }; then
+  ry_claim_write "$backend" "$self"
   standing="you are the yardmaster."
+elif [ -n "$held" ] && [ "$held_backend" != "$backend" ]; then
+  standing="another yardmaster holds the yard on the $held_backend backend ($held), and this session is on $backend. One yard runs on one backend — do not dispatch or act on the inbox. Ask the dispatcher which backend this yard should use."
 elif [ -n "$held" ]; then
   standing="another yardmaster holds the yard ($held). Do not dispatch or act on the inbox — you would take work from it. Ask the dispatcher before taking over."
 else

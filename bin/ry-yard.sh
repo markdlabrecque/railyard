@@ -25,9 +25,15 @@ case $(ry_backend) in
     s=$(ry_tmux_session)
     ry_tmux has-session -t "=$s" 2>/dev/null || ry_tmux new-session -d -s "$s" -n yard -c "$home" "$cmd"
     if [ -n "${TMUX:-}" ]; then ry_tmux switch-client -t "=$s"; else ry_tmux attach -t "=$s"; fi ;;
+  cmux)
+    ws=$(ry_cmux_open yardmaster "$home" "$cmd")
+    echo "yardmaster opened in cmux: $ws" ;;
+  herdr)
+    t=$(ry_herdr_open yardmaster "$home" "$cmd")
+    echo "yardmaster opened in herdr: $t" ;;
   orca)
     ry_orca_ensure_repo "$home"
     out=$(orca terminal create --worktree "path:$home" --title yardmaster --command "$cmd" --focus --json)
     ry_orca_ok "$out"; echo "yardmaster opened in Orca: $(jq -r '.result.terminal.handle' <<<"$out")" ;;
-  *) ry_die "ry-yard.sh supports tmux or orca" ;;
+  *) ry_die "ry-yard.sh supports tmux, orca, cmux or herdr" ;;
 esac

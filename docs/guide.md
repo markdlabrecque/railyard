@@ -46,8 +46,8 @@ start. Do not register the same project in two yards.
 
 ## Running in Orca
 
-tmux is the default; Orca is the other supported
-**backend** — the thing that hosts terminals. Railyard still owns everything
+tmux is the default; Orca, cmux and herdr are the other supported
+**backends** — the thing that hosts terminals. Railyard still owns everything
 that matters (sidings, state, the watcher, the inbox); the backend only decides
 what window an engine appears in.
 
@@ -67,20 +67,69 @@ an external worktree. Decoupling stops that terminal.
 
 Nothing about the daily loop changes. The only differences:
 
-| | tmux | Orca |
-| --- | --- | --- |
-| the yard | session `railyard`, window `yard` | terminal `yardmaster` |
-| an engine | window `ry-<id>` | terminal `ry-<id>` |
-| the yard claim | `state/yardmaster.pane` (`$TMUX_PANE`) | `state/yardmaster.orca` (`$ORCA_TERMINAL_HANDLE`) |
-| shutting down | `tmux kill-session -t railyard` | close the terminals in Orca |
+| | tmux | Orca | cmux | herdr |
+| --- | --- | --- | --- | --- |
+| the yard | session `railyard`, window `yard` | terminal `yardmaster` | workspace `yardmaster` | tab `yardmaster` |
+| an engine | window `ry-<id>` | terminal `ry-<id>` | workspace `ry-<id>` | tab `ry-<id>` |
+| the yard claim | `$TMUX_PANE` | `$ORCA_TERMINAL_HANDLE` | `$CMUX_WORKSPACE_ID` | `$HERDR_PANE_ID` |
+| shutting down | `tmux kill-session -t railyard` | close the terminals in Orca | close the workspaces in cmux | close the tabs in herdr |
 
 Use `bin/ry-peek.sh <id>` and `bin/ry-send.sh <id> "<text>"` to look at or talk
 to an engine — they read the backend out of the task's own state, so they work
 the same either way. Reach for `tmux` commands directly only on a tmux yard.
 
-One caveat: the yard claim is per backend. Open the same yard once in tmux and
-once in Orca and each holds its own claim file, so neither is told the other is
-there — and they share one inbox. Pick a backend per yard and stay on it.
+Whichever backend you use, the claim lands in one file,
+`state/yardmaster.claim`, naming the backend and the terminal:
+
+```
+backend=tmux
+target=%3
+```
+
+So a yard picks a backend and stays on it. Start a session on a different
+backend while another holds the yard and it is told so at session start and
+stands down, rather than quietly claiming alongside it and sharing the inbox.
+
+## Running in cmux
+
+```sh
+RY_BACKEND=cmux bin/ry-yard.sh
+```
+
+One cmux workspace per engine, named `ry-<id>`, opened on its siding. Same loop,
+same commands — see the table above for what changes.
+
+Two things worth knowing:
+
+- **The CLI is not on your `PATH`.** It lives inside the app bundle, and
+  railyard falls back to
+  `/Applications/cmux.app/Contents/Resources/bin/cmux` when `cmux` is not
+  found. `RY_CMUX_BIN` overrides that.
+- **cmux only accepts control from processes started inside cmux.** A yard
+  *hosted* in cmux satisfies that on its own — the watcher inherits the socket
+  credentials from the yardmaster that started it. Driving cmux from a yard
+  hosted elsewhere needs `socketControlMode` raised from `cmuxOnly` in
+  `~/.config/cmux/cmux.json`; `RY_CMUX_PASSWORD` is passed through for the
+  password mode.
+
+## Running in herdr
+
+```sh
+RY_BACKEND=herdr bin/ry-yard.sh
+```
+
+One herdr tab per engine, labelled `ry-<id>`, opened on its siding. Same loop,
+same commands — see the table above for what changes.
+
+Two things worth knowing:
+
+- **herdr needs its server running.** `bin/ry-yard.sh` and every dispatch check
+  `herdr status server` first and refuse early rather than half-open a task.
+  Start it by running `herdr` once.
+- **A task's `target` holds two ids**, written `tab:<tab_id>/pane:<pane_id>`.
+  The pane is what peek and send talk to; the tab is what decouple closes.
+  Nothing else in railyard has to care, but that is why the field looks
+  different from the other backends'.
 
 ## Register a project
 

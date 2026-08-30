@@ -12,7 +12,7 @@ scripts may be ported with attribution in the file header.
 
 In:
 - Harness: Claude Code only.
-- Backends: tmux (reference) and Orca, behind `bin/ry-backend-lib.sh`. Orca hosts a terminal in our own siding (`orca terminal create --worktree path:<siding>`) after the project clone is registered as an Orca repo; the yardmaster is nudged via `ORCA_TERMINAL_HANDLE`.
+- Backends: tmux (reference), Orca, cmux and herdr, behind `bin/ry-backend-lib.sh`. Orca hosts a terminal in our own siding (`orca terminal create --worktree path:<siding>`) after the project clone is registered as an Orca repo; the yardmaster is nudged via `ORCA_TERMINAL_HANDLE`.
 - Worktrees: plain `git worktree add` under `yard/<project>/<id>/`. No treehouse.
 - Delivery modes per task: `local-only` (fast-forward merge on approval),
   `pr` (open a PR, watch CI), `no-mistakes` (reserved; wired when installed).
@@ -129,16 +129,26 @@ settles *which* session holds the yard, because the identity is not the scarce
 thing — the inbox is. Two yardmasters sharing one inbox take work from each
 other, and neither is told.
 
-The claim is the terminal the watcher nudges, and each backend names its own:
-`state/yardmaster.pane` (a tmux `$TMUX_PANE`) or `state/yardmaster.orca` (an
-`$ORCA_TERMINAL_HANDLE`). A session claims it when the terminal is free,
-already its own, or held by one that has since died. Otherwise it is told who
-holds the yard and stands down. A session with no terminal at all holds
-nothing: it is told the watcher cannot wake it, so it reads the manifest itself
-rather than ending its turn to wait for a nudge that will never come.
+The claim is the terminal the watcher nudges. Each backend names its own
+terminals, so the claim is a pair — which backend, and which terminal in it —
+and both live in one file, `state/yardmaster.claim`:
 
-Because the claim file is per backend, running one yard in two backends at once
-defeats it — two claims, one inbox. A yard picks a backend and keeps it.
+```
+backend=tmux
+target=%3
+```
+
+A session claims it when the terminal is free, already its own, or held by one
+that has since died. Otherwise it is told who holds the yard and stands down. A
+session with no terminal at all holds nothing: it is told the watcher cannot
+wake it, so it reads the manifest itself rather than ending its turn to wait
+for a nudge that will never come.
+
+One file rather than one per backend is what makes a yard opened in two
+backends visible. When the claim names a backend other than this session's, the
+session is told exactly that and stands down, instead of writing a second claim
+that the first would never see. It also means the watcher reads one place to
+find the yardmaster, however many backends exist.
 
 ## More than one yard
 
@@ -173,6 +183,25 @@ Orca hosts the terminal only; railyard still cuts its own sidings. The project
 clone is registered once (`orca repo add`), after which Orca sees each siding as
 an external worktree and `orca terminal create --worktree path:<siding>` opens a
 visible terminal there.
+
+cmux is the same shape with one workspace per engine
+(`new-workspace --cwd <siding> --command`). Two cmux facts drive the
+implementation. Its printed handles are positional refs (`workspace:1`) that
+renumber when a workspace closes, so the target stored in meta is always the
+stable uuid, looked up by the title we gave the workspace. And its control
+socket only accepts callers started inside cmux — which a cmux-hosted yard
+already is, because the watcher inherits `CMUX_SOCKET_PASSWORD` from the
+yardmaster that spawned it.
+
+herdr is the same shape again, one tab per engine (`tab create --cwd <siding>
+--label ry-<id>`, then `pane run` to start the engine in that tab's root pane).
+It is the only backend whose terminal needs two ids: the pane is what you read
+and type into, the tab is what you close. Rather than teach the rest of
+railyard about a second id, both travel in the one `target=` field as
+`tab:<tab_id>/pane:<pane_id>`. Every herdr command answers with the socket
+API's JSON envelope, so nothing is screen-scraped, and `agent prompt` handles
+Claude's bracketed-paste semantics when herdr has recognised the pane as an
+agent — a pane it has not takes literal text plus Enter instead.
 
 ## Authority rules (kept from firstmate)
 
