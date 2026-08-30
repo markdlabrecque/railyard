@@ -19,8 +19,8 @@ glab auth status      # expect: logged in to your GitLab host
 ```sh
 bin/ry-yard.sh
 ```
-See: a tmux session `railyard`, window `yard`, Claude starting in this repo. First message in context: `railyard: 0 engine(s) running, 0 turn-ended, 0 unread inbox line(s)`.
-Check from another terminal: `cat state/yardmaster.pane` shows a `%N`, `cat state/.watch.lock` shows a live pid (`kill -0 <pid>`).
+See: a tmux session `railyard`, window `yard`, Claude starting in this repo. The SessionStart hook silently adds `railyard: 0 engine(s) running, 0 turn-ended, 0 unread inbox line(s)` to Claude's context; you will not see it printed.
+Check it ran, either way: ask the yard `what did the railyard session start hook report?` (Claude quotes the line), or from another terminal `cat state/yardmaster.pane` shows a `%N` and `cat state/.watch.lock` shows a live pid (`kill -0 <pid>`).
 Note if: no summary line (hook did not run) or no pane file (Claude was started outside tmux).
 
 ## 2. Board, empty
