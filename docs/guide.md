@@ -18,7 +18,8 @@ bin/ry-yard.sh
 ```
 
 A tmux session `railyard` with the yardmaster in window `yard`. Re-running
-attaches to the existing session rather than starting a second one. A hook
+attaches to the existing session rather than starting a second one. To run the
+yard in Orca instead, see [Running in Orca](#running-in-orca). A hook
 records the pane, starts the watcher daemon, and hands the yardmaster a summary
 of where things stand.
 
@@ -42,6 +43,44 @@ RY_TMUX_SESSION=beta bin/ry-yard.sh
 Without that, both yards fight over the session named `railyard` and beta's
 engines open windows in alpha. `bin/ry-yard.sh --dry-run` shows what would
 start. Do not register the same project in two yards.
+
+## Running in Orca
+
+tmux is the default; Orca is the other supported
+**backend** — the thing that hosts terminals. Railyard still owns everything
+that matters (sidings, state, the watcher, the inbox); the backend only decides
+what window an engine appears in.
+
+Needs the `orca` CLI on your `PATH`, with Orca running, plus `jq`.
+
+```sh
+RY_BACKEND=orca bin/ry-yard.sh
+```
+
+That registers this repo with Orca if it is not already, then opens a focused
+Orca terminal titled `yardmaster` running Claude here. `RY_BACKEND` travels into
+that session, so every engine it dispatches opens in Orca too — you never set it
+again. Put it in your shell profile if Orca is your normal way to work.
+
+Each engine gets its own Orca terminal titled `ry-<id>`, opened on its siding as
+an external worktree. Decoupling stops that terminal.
+
+Nothing about the daily loop changes. The only differences:
+
+| | tmux | Orca |
+| --- | --- | --- |
+| the yard | session `railyard`, window `yard` | terminal `yardmaster` |
+| an engine | window `ry-<id>` | terminal `ry-<id>` |
+| the yard claim | `state/yardmaster.pane` (`$TMUX_PANE`) | `state/yardmaster.orca` (`$ORCA_TERMINAL_HANDLE`) |
+| shutting down | `tmux kill-session -t railyard` | close the terminals in Orca |
+
+Use `bin/ry-peek.sh <id>` and `bin/ry-send.sh <id> "<text>"` to look at or talk
+to an engine — they read the backend out of the task's own state, so they work
+the same either way. Reach for `tmux` commands directly only on a tmux yard.
+
+One caveat: the yard claim is per backend. Open the same yard once in tmux and
+once in Orca and each holds its own claim file, so neither is told the other is
+there — and they share one inbox. Pick a backend per yard and stay on it.
 
 ## Register a project
 
@@ -141,7 +180,7 @@ Two more session commands:
 ## When something goes wrong
 
 **`engine <id> silent for Nm`** — a running engine ended no turn. Look at it:
-`tmux capture-pane -p -t railyard:ry-<id>`.
+`bin/ry-peek.sh <id>`.
 
 **`engine <id> blocked-stranded <blocker>`** — you decoupled a blocker that
 never merged, so nothing behind it can ever unblock. It is never started
@@ -164,6 +203,8 @@ instructions into the engine's window; it keeps its context and carries on.
 | `bin/ry-inbox.sh [--ack]` | unread engine events |
 | `bin/ry-deps.sh <id>` | is a queued task ready, pending, or stranded |
 | `bin/ry-couple.sh <id>` | cut a queued task's siding by hand |
+| `bin/ry-peek.sh <id>` | recent output from an engine's terminal |
+| `bin/ry-send.sh <id> "<text>"` | send follow-up text to an engine |
 | `bin/ry-review-diff.sh <id>` | an engine's commits and diff |
 | `bin/ry-merge-local.sh [--push] <id>` | fast-forward the base branch |
 | `bin/ry-pr.sh <id>` | open the PR/MR |
@@ -175,7 +216,7 @@ Every script takes `-h`.
 ## Shutting down
 
 ```sh
-tmux kill-session -t railyard
+tmux kill-session -t railyard   # on Orca: close the terminals in Orca
 kill "$(cat state/.watch.lock)"
 ```
 

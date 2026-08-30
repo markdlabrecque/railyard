@@ -12,7 +12,7 @@ Pick a project that: lives on your self-hosted GitLab, has a test suite the engi
 cd ~/Projects/railyard
 git clone <gitlab-ssh-url> projects/<proj>
 echo '- `<proj>` — pr, notes: first real run' >> data/projects.md
-bats tests            # expect 47 ok
+bats tests            # expect 106 ok
 glab auth status      # expect: logged in to your GitLab host
 ```
 
@@ -24,6 +24,7 @@ bin/ry-yard.sh
 See: a tmux session `railyard`, window `yard`, Claude starting in this repo. The SessionStart hook silently adds `railyard: 0 engine(s) running, 0 turn-ended, 0 unread inbox line(s)` to Claude's context; you will not see it printed.
 Check it ran, either way: ask the yard `what did the railyard session start hook report?` (Claude quotes the line), or from another terminal `cat state/yardmaster.pane` shows a `%N` and `cat state/.watch.lock` shows a live pid (`kill -0 <pid>`).
 Note if: no summary line (hook did not run) or no pane file (Claude was started outside tmux).
+On Orca: `RY_BACKEND=orca bin/ry-yard.sh` instead — an Orca terminal titled `yardmaster`, and the claim lands in `state/yardmaster.orca`. Everywhere below that says a tmux window `ry-<id>`, read an Orca terminal `ry-<id>`; use `bin/ry-peek.sh <id>` rather than `tmux capture-pane`.
 
 ## 2. Manifest, empty
 

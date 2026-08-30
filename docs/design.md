@@ -129,12 +129,16 @@ settles *which* session holds the yard, because the identity is not the scarce
 thing — the inbox is. Two yardmasters sharing one inbox take work from each
 other, and neither is told.
 
-The claim is the tmux pane the watcher nudges, in `state/yardmaster.pane`. A
-session claims it when the pane is free, already its own, or held by a pane that
-has since died. Otherwise it is told who holds the yard and stands down. A
-session with no tmux pane holds nothing: it is told the watcher cannot wake it,
-so it reads the manifest itself rather than ending its turn to wait for a nudge
-that will never come.
+The claim is the terminal the watcher nudges, and each backend names its own:
+`state/yardmaster.pane` (a tmux `$TMUX_PANE`) or `state/yardmaster.orca` (an
+`$ORCA_TERMINAL_HANDLE`). A session claims it when the terminal is free,
+already its own, or held by one that has since died. Otherwise it is told who
+holds the yard and stands down. A session with no terminal at all holds
+nothing: it is told the watcher cannot wake it, so it reads the manifest itself
+rather than ending its turn to wait for a nudge that will never come.
+
+Because the claim file is per backend, running one yard in two backends at once
+defeats it — two claims, one inbox. A yard picks a backend and keeps it.
 
 ## More than one yard
 
@@ -151,6 +155,24 @@ would start.
 
 Registering the same project in two yards is not prevented, and is a bad idea:
 two engines would work branches in one clone.
+
+## Backends
+
+`bin/ry-backend-lib.sh` is the seam. `RY_BACKEND` (`tmux` default, `orca`, or
+`none` for tests) picks the implementation; nothing else in `bin/` branches on
+it. A backend answers eight questions: open an engine terminal, stop it, peek
+at it, send it text, nudge the yardmaster, name this session's own terminal,
+name the claim file, and say whether a terminal is still alive.
+
+An engine's backend and target are written into its meta (`backend=`,
+`target=`) when it launches, so `ry-peek.sh`, `ry-send.sh` and `ry-decouple.sh`
+find the right terminal from state alone — no env needed, and a yard survives
+`RY_BACKEND` changing under it for engines already running.
+
+Orca hosts the terminal only; railyard still cuts its own sidings. The project
+clone is registered once (`orca repo add`), after which Orca sees each siding as
+an external worktree and `orca terminal create --worktree path:<siding>` opens a
+visible terminal there.
 
 ## Authority rules (kept from firstmate)
 

@@ -16,14 +16,14 @@ You are the **yardmaster**. Mark is the **dispatcher**. This repo is your home; 
 - `state/` — live task state: `<id>.meta`, `<id>.status`, `<id>.waybill.md`, `<id>.last.md`, `inbox.md`, `events.log`.
 - `data/<id>/report.md` — survey reports. `data/learnings.md` — durable lessons (`/shed` writes here).
 - `templates/engine-preamble.md` — the rules every engine receives before its waybill.
-- Backend (`RY_BACKEND`, default `tmux`, or `orca`): where engine terminals live. Talk to engines only through `bin/ry-peek.sh` and `bin/ry-send.sh`; they know the backend.
+- Backend (`RY_BACKEND`, default `tmux`, or `orca`): where engine terminals live. Talk to engines only through `bin/ry-peek.sh` and `bin/ry-send.sh`; they read the backend from the task's state, so never reach for `tmux` directly.
 
 ## Session start
 
 The SessionStart hook claimed the yard, started the watcher and printed the summary. Read it — it opens with your standing:
 - **you are the yardmaster** — the watcher can wake you. Handle unread inbox lines before anything else (§ Inbox).
 - **another yardmaster holds the yard** — stand down. Do not dispatch or act on the inbox; you would take work from it. Ask the dispatcher before taking over.
-- **no tmux pane holds the yard** — you are the yardmaster but nothing can wake you. Never end your turn to wait; read `bin/ry-manifest.sh` yourself.
+- **no terminal holds the yard** — you are the yardmaster but nothing can wake you. Never end your turn to wait; read `bin/ry-manifest.sh` yourself.
 
 ## Task lifecycle
 
