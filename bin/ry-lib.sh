@@ -43,3 +43,14 @@ ry_set_status() {  # <id> <status>
   local home; home=$(ry_home)
   printf '%s\n' "$2" > "$home/state/$1.status"
 }
+
+ry_claude_trust() {  # <dir>: pre-accept Claude Code's folder-trust dialog for dir
+  local f=${RY_CLAUDE_JSON:-$HOME/.claude.json} tmp
+  [ -f "$f" ] || printf '{}\n' > "$f"
+  tmp=$(mktemp "$f.XXXXXX")
+  if jq --arg p "$1" '.projects[$p] = ((.projects[$p] // {}) + {hasTrustDialogAccepted: true})' "$f" > "$tmp"; then
+    mv "$tmp" "$f"
+  else
+    rm -f "$tmp"; ry_die "could not update $f"
+  fi
+}

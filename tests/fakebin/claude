@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Fake claude for tests: record cwd + args, then idle like a real session.
+printf '%s\n%s\n' "$PWD" "$*" > "$RY_FAKE_CLAUDE_LOG"
+sleep 60

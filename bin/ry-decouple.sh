@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Decouple an engine: remove its siding (worktree) and archive its state.
 # The ry/<id> branch is kept unless --delete-branch. A dirty siding is refused
-# unless --force. Backend session teardown is added with RY_BACKEND.
+# unless --force. Kills the engine's tmux window first when one was opened.
 #
 # usage: ry-decouple.sh [--force] [--delete-branch] <id>
 set -euo pipefail
 # shellcheck source=bin/ry-lib.sh
 . "$(dirname "$0")/ry-lib.sh"
+# shellcheck source=bin/ry-tmux-lib.sh
+. "$(dirname "$0")/ry-tmux-lib.sh"
 
 force=0 delete_branch=0 id=""
 while [ $# -gt 0 ]; do
@@ -26,6 +28,11 @@ project=$(ry_meta_get "$id" project)
 siding=$(ry_meta_get "$id" siding)
 branch=$(ry_meta_get "$id" branch)
 pdir=$(ry_project_dir "$project")
+window=$(ry_meta_get "$id" window)
+
+if [ -n "$window" ] && [ "${RY_BACKEND:-tmux}" = tmux ]; then
+  ry_tmux_kill_window "$window"
+fi
 
 if [ -d "$siding" ]; then
   if [ "$force" -eq 0 ] && [ -n "$(git -C "$siding" status --porcelain)" ]; then

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Dispatch an engine: create a siding (git worktree) for one task and record
 # its meta, status and waybill under state/. Launching the engine in a backend
-# is the next step (RY_BACKEND); with RY_BACKEND=none this only lays track.
+# happens via ry-engine-launch.sh unless RY_BACKEND=none (only lays track).
 #
 # usage: ry-dispatch.sh (--haul|--survey) [--mode local-only|pr|no-mistakes] <project> <waybill>
 # prints: id=<id> and siding=<path>
@@ -55,5 +55,9 @@ created=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 META
 printf '%s\n' "$waybill" > "$home/state/$id.waybill.md"
 ry_set_status "$id" dispatched
+
+if [ "${RY_BACKEND:-tmux}" != none ]; then
+  "$(dirname "$0")/ry-engine-launch.sh" "$id" >/dev/null
+fi
 
 printf 'id=%s\nsiding=%s\n' "$id" "$siding"
