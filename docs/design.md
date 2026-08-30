@@ -12,7 +12,7 @@ scripts may be ported with attribution in the file header.
 
 In:
 - Harness: Claude Code only.
-- Backends: tmux (reference) and Orca, behind `bin/ry-backend-lib.sh`. Orca hosts a terminal in our own siding (`orca terminal create --worktree path:<siding>`) after the project clone is registered as an Orca repo; the yardmaster is nudged via `ORCA_TERMINAL_HANDLE`.
+- Backends: tmux (reference), Orca and cmux, behind `bin/ry-backend-lib.sh`. Orca hosts a terminal in our own siding (`orca terminal create --worktree path:<siding>`) after the project clone is registered as an Orca repo; the yardmaster is nudged via `ORCA_TERMINAL_HANDLE`.
 - Worktrees: plain `git worktree add` under `yard/<project>/<id>/`. No treehouse.
 - Delivery modes per task: `local-only` (fast-forward merge on approval),
   `pr` (open a PR, watch CI), `no-mistakes` (reserved; wired when installed).
@@ -173,6 +173,15 @@ Orca hosts the terminal only; railyard still cuts its own sidings. The project
 clone is registered once (`orca repo add`), after which Orca sees each siding as
 an external worktree and `orca terminal create --worktree path:<siding>` opens a
 visible terminal there.
+
+cmux is the same shape with one workspace per engine
+(`new-workspace --cwd <siding> --command`). Two cmux facts drive the
+implementation. Its printed handles are positional refs (`workspace:1`) that
+renumber when a workspace closes, so the target stored in meta is always the
+stable uuid, looked up by the title we gave the workspace. And its control
+socket only accepts callers started inside cmux — which a cmux-hosted yard
+already is, because the watcher inherits `CMUX_SOCKET_PASSWORD` from the
+yardmaster that spawned it.
 
 ## Authority rules (kept from firstmate)
 

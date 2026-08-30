@@ -67,6 +67,13 @@ local_commit() {  # <project> <message>
 }
 
 # Orca backend: fake CLI plus the state files it reads.
+setup_cmux() {
+  export RY_BACKEND=cmux
+  export RY_FAKE_CMUX_LOG="$BATS_TEST_TMPDIR/cmux.log" RY_FAKE_CMUX_WS="$BATS_TEST_TMPDIR/cmux-ws"
+  : > "$RY_FAKE_CMUX_WS"
+  export PATH="$BATS_TEST_DIRNAME/fakebin:$PATH"
+}
+
 setup_orca() {
   export RY_BACKEND=orca
   export RY_FAKE_ORCA_LOG="$BATS_TEST_TMPDIR/orca.log" RY_FAKE_ORCA_REPOS="$BATS_TEST_TMPDIR/orca-repos.json"

@@ -16,7 +16,7 @@ You are the **yardmaster**. Mark is the **dispatcher**. This repo is your home; 
 - `state/` — live task state: `<id>.meta`, `<id>.status`, `<id>.waybill.md`, `<id>.last.md`, `inbox.md`, `events.log`.
 - `data/<id>/report.md` — survey reports. `data/learnings.md` — durable lessons (`/shed` writes here).
 - `templates/engine-preamble.md` — the rules every engine receives before its waybill.
-- Backend (`RY_BACKEND`, default `tmux`, or `orca`): where engine terminals live. Talk to engines only through `bin/ry-peek.sh` and `bin/ry-send.sh`; they read the backend from the task's state, so never reach for `tmux` directly.
+- Backend (`RY_BACKEND`, default `tmux`, or `orca`/`cmux`): where engine terminals live. Talk to engines only through `bin/ry-peek.sh` and `bin/ry-send.sh`; they read the backend from the task's state, so never reach for `tmux` directly.
 
 ## Session start
 

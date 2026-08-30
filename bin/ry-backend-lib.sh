@@ -7,6 +7,8 @@
 . "$(dirname "${BASH_SOURCE[0]}")/ry-tmux-lib.sh"
 # shellcheck source=bin/ry-orca-lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/ry-orca-lib.sh"
+# shellcheck source=bin/ry-cmux-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/ry-cmux-lib.sh"
 
 ry_backend() { printf '%s\n' "${RY_BACKEND:-tmux}"; }
 
@@ -14,7 +16,8 @@ ry_backend_check() {
   case $(ry_backend) in
     tmux|none) ;;
     orca) command -v orca >/dev/null || ry_die "RY_BACKEND=orca but the orca CLI is not installed" ;;
-    *) ry_die "unknown RY_BACKEND '$(ry_backend)' (tmux|orca|none)" ;;
+    cmux) ry_cmux_available || ry_die "RY_BACKEND=cmux but the cmux CLI was not found" ;;
+    *) ry_die "unknown RY_BACKEND '$(ry_backend)' (tmux|orca|cmux|none)" ;;
   esac
 }
 
@@ -23,6 +26,7 @@ ry_backend_open() {  # <id> <siding> <command> -> target
     tmux) ry_tmux_open_window "ry-$1" "$2" "$3"; printf 'ry-%s\n' "$1" ;;
     orca) ry_orca_ensure_repo "$(ry_project_dir "$(ry_meta_get "$1" project)")"
           ry_orca_open "ry-$1" "$2" "$3" ;;
+    cmux) ry_cmux_open "ry-$1" "$2" "$3" ;;
     none) ry_die "RY_BACKEND=none: nothing to launch" ;;
   esac
 }
@@ -33,6 +37,7 @@ ry_backend_stop() {  # <id>
   case $backend in
     tmux) [ -n "$target" ] && ry_tmux_kill_window "$target" ;;
     orca) ry_orca_stop_siding "$siding" ;;
+    cmux) [ -n "$target" ] && ry_cmux_close "$target" ;;
   esac
   return 0
 }
@@ -42,6 +47,7 @@ ry_backend_peek() {  # <id> -> recent terminal output
   case $(ry_meta_get "$1" backend) in
     tmux) ry_tmux capture-pane -p -t "=$(ry_tmux_session):$target" ;;
     orca) ry_orca_read "$target" ;;
+    cmux) ry_cmux_read "$target" ;;
     *) ry_die "engine $1 has no terminal" ;;
   esac
 }
@@ -51,6 +57,7 @@ ry_backend_send() {  # <id> <text>
   case $(ry_meta_get "$1" backend) in
     tmux) ry_tmux send-keys -t "=$(ry_tmux_session):$target" -l -- "$2" && ry_tmux send-keys -t "=$(ry_tmux_session):$target" Enter ;;
     orca) ry_orca_send "$target" "$2" ;;
+    cmux) ry_cmux_send "$target" "$2" ;;
     *) ry_die "engine $1 has no terminal" ;;
   esac
 }
@@ -63,6 +70,7 @@ ry_backend_send() {  # <id> <text>
 ry_backend_self() {  # -> this session's terminal id, empty if it has none
   case $(ry_backend) in
     orca) printf '%s\n' "${ORCA_TERMINAL_HANDLE:-}" ;;
+    cmux) printf '%s\n' "${CMUX_WORKSPACE_ID:-}" ;;
     *)    printf '%s\n' "${TMUX_PANE:-}" ;;
   esac
 }
@@ -70,6 +78,7 @@ ry_backend_self() {  # -> this session's terminal id, empty if it has none
 ry_backend_claim_file() {  # -> the file holding this backend's claim
   case $(ry_backend) in
     orca) printf '%s\n' "$(ry_home)/state/yardmaster.orca" ;;
+    cmux) printf '%s\n' "$(ry_home)/state/yardmaster.cmux" ;;
     *)    printf '%s\n' "$(ry_home)/state/yardmaster.pane" ;;
   esac
 }
@@ -79,18 +88,22 @@ ry_backend_alive() {  # <terminal-id>: is that terminal still there?
   case $(ry_backend) in
     orca) command -v orca >/dev/null 2>&1 &&
           orca terminal read --terminal "$1" --json >/dev/null 2>&1 ;;
+    cmux) ry_cmux_available && ry_cmux_alive "$1" ;;
     *)    ry_tmux display -p -t "$1" '#{pane_id}' >/dev/null 2>&1 ;;
   esac
 }
 
 ry_backend_nudge() {  # <text>: best effort, never fails
-  local st pane handle; st="$(ry_home)/state"
+  local st pane handle ws; st="$(ry_home)/state"
   pane=$(cat "$st/yardmaster.pane" 2>/dev/null || true)
   handle=$(cat "$st/yardmaster.orca" 2>/dev/null || true)
+  ws=$(cat "$st/yardmaster.cmux" 2>/dev/null || true)
   if [ -n "$pane" ] && ry_tmux display -p -t "$pane" '#{pane_id}' >/dev/null 2>&1; then
     ry_tmux send-keys -t "$pane" -l -- "$1" && ry_tmux send-keys -t "$pane" Enter
   elif [ -n "$handle" ] && command -v orca >/dev/null; then
     orca terminal send --terminal "$handle" --text "$1" --enter --json >/dev/null 2>&1 || true
+  elif [ -n "$ws" ] && ry_cmux_available; then
+    ry_cmux_send "$ws" "$1" >/dev/null 2>&1 || true
   fi
   return 0
 }
