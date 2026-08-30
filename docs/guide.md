@@ -1,5 +1,8 @@
 # Railyard: a guide for the dispatcher
 
+*For the human. Agents get their instructions from [`../AGENTS.md`](../AGENTS.md)
+and do not need this file.*
+
 Railyard runs Claude Code agents on your repos, one isolated git worktree per
 task, and keeps you in the loop for every decision that matters. You are the
 **dispatcher**. The session you talk to is the **yardmaster**. It reads your

@@ -1,5 +1,8 @@
 # Railyard design
 
+*For the dispatcher and the yardmaster — why railyard works the way it does.
+How to use it is [guide.md](guide.md).*
+
 Railyard is a personal agent distro: a folder of instructions, bash scripts,
 and state that turns Claude Code into a dispatcher that runs worker agents in
 git worktrees. Built for one user. Inspired by firstmate (MIT); specific

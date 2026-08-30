@@ -1,5 +1,7 @@
 # Railyard
 
+*For the dispatcher and every agent.*
+
 A personal agent distro: instructions, bash scripts, and state that turn Claude Code
 into a dispatcher running worker agents in git worktrees. The vocabulary is drawn
 from railway operations — every term below has one meaning and one spelling.

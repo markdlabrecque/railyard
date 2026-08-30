@@ -1,5 +1,7 @@
 # Railyard first real run — test plan
 
+*For the dispatcher — a manual script for proving the loop on a real project.*
+
 Goal: prove the loop on one of your real GitLab projects, low risk, in about 30 minutes. Every step says what to do, what you should see, and what to note if it differs.
 
 Pick a project that: lives on your self-hosted GitLab, has a test suite the engine can run, and where a throwaway branch/MR is harmless. Call it `<proj>` below.
