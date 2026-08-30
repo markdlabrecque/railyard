@@ -45,6 +45,9 @@ if [ "$delete_branch" -eq 1 ]; then
   git -C "$pdir" branch -q -D "$branch" 2>/dev/null || true
 fi
 
+# Preserve the outcome before it is overwritten: whether this task merged is
+# what anything queued behind it needs to know.
+printf 'outcome=%s\n' "$(ry_status_of "$id")" >> "$home/state/$id.meta"
 ry_set_status "$id" decoupled
 arch="$home/state/archive/$id"
 mkdir -p "$arch"

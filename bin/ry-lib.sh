@@ -53,6 +53,18 @@ ry_meta_get() {  # <id> <key>
   sed -n "s/^$2=//p" "$home/state/$1.meta"
 }
 
+ry_status_of() {  # <id> -> its status, resolving through state/archive/
+  # A decoupled task keeps the outcome it was archived with, so a blocker that
+  # merged before being decoupled still reads as merged.
+  local home id=$1 arch; home=$(ry_home)
+  if [ -f "$home/state/$id.status" ]; then cat "$home/state/$id.status"; return; fi
+  arch="$home/state/archive/$id"
+  if [ -f "$arch/meta" ] && grep -q '^outcome=' "$arch/meta"; then
+    sed -n 's/^outcome=//p' "$arch/meta"; return
+  fi
+  [ -f "$arch/status" ] && cat "$arch/status"
+}
+
 ry_set_status() {  # <id> <status>
   local home; home=$(ry_home)
   printf '%s\n' "$2" > "$home/state/$1.status"

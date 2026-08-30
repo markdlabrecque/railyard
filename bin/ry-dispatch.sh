@@ -50,6 +50,11 @@ git -C "$pdir" rev-parse --verify -q "refs/remotes/origin/$base" >/dev/null \
 for dep in ${after//,/ }; do
   [ -f "$home/state/$dep.meta" ] || [ -f "$home/state/archive/$dep/meta" ] \
     || ry_die "unknown blocker id '$dep'"
+  case $(ry_status_of "$dep") in
+    merged) ;;
+    *) [ -f "$home/state/$dep.status" ] \
+         || ry_die "blocker '$dep' was decoupled without merging; nothing can queue behind it" ;;
+  esac
 done
 
 id=$(ry_new_id "$project")

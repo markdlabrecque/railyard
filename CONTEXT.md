@@ -162,6 +162,16 @@ The background daemon that turns events into inbox lines, wakes the yardmaster,
 polls open PRs, and flags engines that have gone silent.
 _Avoid_: monitor, poller, daemon
 
+**Stranded**:
+A queued task whose blocker was decoupled without ever merging, so its block can
+never lift on its own. Always a decision for the dispatcher: drop the task, or
+release the block by hand.
+_Avoid_: orphaned, dead, abandoned
+
+**Outcome**:
+The status a task held when it was decoupled, kept in its archived meta. Without
+it, archiving would erase whether a blocker ever merged.
+
 **Stall**:
 A task whose status is still `running` after too long with no turn end. Reported
 once, and never a status of its own.

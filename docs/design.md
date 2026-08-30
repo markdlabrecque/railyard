@@ -86,6 +86,15 @@ railyard/
    - `pr`: `ry-pr.sh <id>` opens PR; `ry-pr-poll.sh` watches CI
 5. `ry-decouple.sh <id>`: kill window, remove worktree, archive meta.
 
+`ry-deps.sh <id>` answers whether a queued task's blockers have cleared:
+`ready`, `pending`, or `stranded` — the last meaning a blocker was decoupled
+without merging, which only the dispatcher can resolve. Decouple records the
+status it archived as `outcome=` in the meta, so a blocker that merged before
+being decoupled still reads as merged.
+
+Edges only ever point at tasks that already exist, so the graph is a DAG by
+construction and there is no cycle to detect.
+
 A task dispatched with `--after <id>` skips step 2's worktree and engine: it is
 recorded `queued` and waits. `ry-couple.sh <id>` does that work later, cutting
 the siding from the base branch as the clone sees it then — including a
