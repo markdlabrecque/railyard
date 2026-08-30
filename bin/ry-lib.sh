@@ -8,6 +8,10 @@ ry_home() {
   cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
 }
 
+ry_usage() {  # <script>: print its header comment block, minus the shebang
+  awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "$1"
+}
+
 ry_die() { printf 'error: %s\n' "$*" >&2; exit "${RY_EXIT:-1}"; }
 
 ry_new_id() {  # <project> -> e.g. xyz-0830-1412-3f9a

@@ -5,6 +5,7 @@
 set -euo pipefail
 # shellcheck source=bin/ry-lib.sh
 . "$(dirname "$0")/ry-lib.sh"
+case ${1:-} in -h|--help) ry_usage "$0"; exit 0 ;; esac
 home=$(ry_home); inbox="$home/state/inbox.md"
 [ -s "$inbox" ] || exit 0
 cat "$inbox"

@@ -4,9 +4,11 @@
 # (the whole final message; its first line is the DONE:/BLOCKED: handoff)
 # to state/<id>.last.md for the yardmaster's wake message.
 # Always exits 0: an engine must never be blocked by its own reporter.
+# usage: Claude Stop hook for an engine session; hook JSON on stdin, RY_ID set.
 set -u
 # shellcheck source=bin/ry-lib.sh
 . "$(dirname "$0")/ry-lib.sh"
+case ${1:-} in -h|--help) ry_usage "$0"; exit 0 ;; esac
 
 input=$(cat || true)
 id=${RY_ID:-}

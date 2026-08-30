@@ -149,8 +149,7 @@ instructions into the engine's window; it keeps its context and carries on.
 | `bin/ry-pr-poll.sh <id>` | check an open PR once, by hand |
 | `bin/ry-decouple.sh [--force] [--delete-branch] <id>` | remove the siding, archive the state |
 
-`ry-dispatch.sh` and `ry-decouple.sh` take `-h`; every other script documents
-its usage in the comment at the top of the file.
+Every script takes `-h`.
 
 ## Shutting down
 

@@ -15,7 +15,7 @@ while [ $# -gt 0 ]; do
   case $1 in
     --force)         force=1 ;;
     --delete-branch) delete_branch=1 ;;
-    -h|--help) sed -n '2,6p' "$0"; exit 0 ;;
+    -h|--help) ry_usage "$0"; exit 0 ;;
     --*) ry_die "unknown flag $1" ;;
     *)   id=$1 ;;
   esac

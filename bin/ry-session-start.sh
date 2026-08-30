@@ -2,9 +2,11 @@
 # Yardmaster SessionStart hook: remember which tmux pane the yardmaster is in
 # (for wake nudges), make sure one watcher daemon is running, and print a short
 # yard summary that lands in the session context.
+# usage: Claude SessionStart hook, run from the railyard home.
 set -uo pipefail
 # shellcheck source=bin/ry-lib.sh
 . "$(dirname "$0")/ry-lib.sh"
+case ${1:-} in -h|--help) ry_usage "$0"; exit 0 ;; esac
 home=$(ry_home); st="$home/state"; bindir=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$st"
 cat >/dev/null || true   # drain hook stdin

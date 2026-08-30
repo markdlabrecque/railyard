@@ -23,7 +23,7 @@ while [ $# -gt 0 ]; do
     --mode)   mode=${2:-}; shift ;;
     --base)   base=${2:-}; shift ;;
     --after)  after=${2:-}; shift ;;
-    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+    -h|--help) ry_usage "$0"; exit 0 ;;
     --*)      ry_die "unknown flag $1" ;;
     *) if [ -z "$project" ]; then project=$1; else waybill=$1; fi ;;
   esac

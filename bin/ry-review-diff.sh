@@ -6,6 +6,7 @@
 set -euo pipefail
 # shellcheck source=bin/ry-lib.sh
 . "$(dirname "$0")/ry-lib.sh"
+case ${1:-} in -h|--help) ry_usage "$0"; exit 0 ;; esac
 
 stat=0 id=""
 for a in "$@"; do case $a in --stat) stat=1;; -*) ry_die "unknown flag $a";; *) id=$a;; esac; done
