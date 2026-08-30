@@ -37,8 +37,10 @@ teardown() { pid=$(cat "$RY_HOME/state/.watch.lock" 2>/dev/null); [ -n "$pid" ] 
 }
 
 @test "cmux wake: session start records CMUX_WORKSPACE_ID and watch sends to it" {
+  printf 'ws-ym yardmaster\n' >> "$RY_FAKE_CMUX_WS"   # cmux shows the yardmaster's workspace
   CMUX_WORKSPACE_ID=ws-ym run ry-session-start.sh <<<'{}'
-  [ "$(cat "$RY_HOME/state/yardmaster.cmux")" = "ws-ym" ]
+  [ "$(claim_target)" = "ws-ym" ]
+  [ "$(claim_backend)" = cmux ]
   kill "$(cat "$RY_HOME/state/.watch.lock")"
   id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
   RY_ID=$id ry-engine-stop.sh <<<"{\"transcript_path\":\"$BATS_TEST_DIRNAME/fixtures/transcript.jsonl\",\"stop_hook_active\":false}"
@@ -51,7 +53,7 @@ teardown() { pid=$(cat "$RY_HOME/state/.watch.lock" 2>/dev/null); [ -n "$pid" ] 
   CMUX_WORKSPACE_ID=ws-first ry-session-start.sh <<<'{}' >/dev/null
   CMUX_WORKSPACE_ID=ws-second run ry-session-start.sh <<<'{}'
   [[ "$output" == *"another yardmaster"* ]]
-  [ "$(cat "$RY_HOME/state/yardmaster.cmux")" = "ws-first" ]
+  [ "$(claim_target)" = "ws-first" ]
 }
 
 @test "a cmux session takes the yard when the holding workspace is gone" {
@@ -60,7 +62,7 @@ teardown() { pid=$(cat "$RY_HOME/state/.watch.lock" 2>/dev/null); [ -n "$pid" ] 
   : > "$RY_FAKE_CMUX_WS"   # that workspace was closed
   CMUX_WORKSPACE_ID=ws-second run ry-session-start.sh <<<'{}'
   [[ "$output" == *"you are the yardmaster"* ]]
-  [ "$(cat "$RY_HOME/state/yardmaster.cmux")" = "ws-second" ]
+  [ "$(claim_target)" = "ws-second" ]
 }
 
 @test "ry-yard.sh --dry-run carries the cmux backend into the yardmaster" {

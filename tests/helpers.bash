@@ -87,3 +87,10 @@ setup_herdr() {
   : > "$RY_FAKE_HERDR_TABS"
   export PATH="$BATS_TEST_DIRNAME/fakebin:$PATH"
 }
+
+# The yard claim: one file, `backend=` and `target=`.
+claim_target() { sed -n 's/^target=//p' "$RY_HOME/state/yardmaster.claim" 2>/dev/null; }
+claim_backend() { sed -n 's/^backend=//p' "$RY_HOME/state/yardmaster.claim" 2>/dev/null; }
+hold_yard() {  # <backend> <target>
+  printf 'backend=%s\ntarget=%s\n' "$1" "$2" > "$RY_HOME/state/yardmaster.claim"
+}

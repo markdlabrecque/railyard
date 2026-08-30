@@ -71,16 +71,24 @@ Nothing about the daily loop changes. The only differences:
 | --- | --- | --- | --- | --- |
 | the yard | session `railyard`, window `yard` | terminal `yardmaster` | workspace `yardmaster` | tab `yardmaster` |
 | an engine | window `ry-<id>` | terminal `ry-<id>` | workspace `ry-<id>` | tab `ry-<id>` |
-| the yard claim | `state/yardmaster.pane` (`$TMUX_PANE`) | `state/yardmaster.orca` (`$ORCA_TERMINAL_HANDLE`) | `state/yardmaster.cmux` (`$CMUX_WORKSPACE_ID`) | `state/yardmaster.herdr` (`$HERDR_PANE_ID`) |
+| the yard claim | `$TMUX_PANE` | `$ORCA_TERMINAL_HANDLE` | `$CMUX_WORKSPACE_ID` | `$HERDR_PANE_ID` |
 | shutting down | `tmux kill-session -t railyard` | close the terminals in Orca | close the workspaces in cmux | close the tabs in herdr |
 
 Use `bin/ry-peek.sh <id>` and `bin/ry-send.sh <id> "<text>"` to look at or talk
 to an engine — they read the backend out of the task's own state, so they work
 the same either way. Reach for `tmux` commands directly only on a tmux yard.
 
-One caveat: the yard claim is per backend. Open the same yard once in tmux and
-once in Orca and each holds its own claim file, so neither is told the other is
-there — and they share one inbox. Pick a backend per yard and stay on it.
+Whichever backend you use, the claim lands in one file,
+`state/yardmaster.claim`, naming the backend and the terminal:
+
+```
+backend=tmux
+target=%3
+```
+
+So a yard picks a backend and stays on it. Start a session on a different
+backend while another holds the yard and it is told so at session start and
+stands down, rather than quietly claiming alongside it and sharing the inbox.
 
 ## Running in cmux
 

@@ -16,7 +16,7 @@ live_pane() {
 @test "session start records the pane, starts one watcher, prints a summary" {
   TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
   [ "$status" -eq 0 ]
-  [ "$(cat "$RY_HOME/state/yardmaster.pane")" = "%7" ]
+  [ "$(claim_target)" = "%7" ]
   pid=$(cat "$RY_HOME/state/.watch.lock"); kill -0 "$pid"
   [[ "$output" == *"railyard"* ]]
   TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
@@ -35,41 +35,61 @@ live_pane() {
   TMUX_PANE=$pane run ry-session-start.sh <<<'{}'
   [ "$status" -eq 0 ]
   [[ "$output" == *"you are the yardmaster"* ]]
-  [ "$(cat "$RY_HOME/state/yardmaster.pane")" = "$pane" ]
+  [ "$(claim_target)" = "$pane" ]
 }
 
 @test "a second session is told another yardmaster holds the yard, and does not steal it" {
   pane=$(live_pane)
-  printf '%s\n' "$pane" > "$RY_HOME/state/yardmaster.pane"
+  hold_yard "$RY_BACKEND" "$pane"
   TMUX_PANE=%99 run ry-session-start.sh <<<'{}'
   [ "$status" -eq 0 ]
   [[ "$output" == *"another yardmaster"* ]]
   [[ "$output" == *"$pane"* ]]
-  [ "$(cat "$RY_HOME/state/yardmaster.pane")" = "$pane" ]
+  [ "$(claim_target)" = "$pane" ]
 }
 
 @test "a session takes the yard when the holding pane is gone" {
   setup_tmux
-  printf '%s\n' "%404" > "$RY_HOME/state/yardmaster.pane"
+  hold_yard "$RY_BACKEND" "%404"
   TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
   [ "$status" -eq 0 ]
   [[ "$output" == *"you are the yardmaster"* ]]
-  [ "$(cat "$RY_HOME/state/yardmaster.pane")" = "%7" ]
+  [ "$(claim_target)" = "%7" ]
 }
 
 @test "session start without tmux still starts the watcher, and says it cannot be woken" {
   run env -u TMUX_PANE ry-session-start.sh <<<'{}'
   [ "$status" -eq 0 ]
-  [ ! -e "$RY_HOME/state/yardmaster.pane" ]
+  [ ! -e "$RY_HOME/state/yardmaster.claim" ]
   kill -0 "$(cat "$RY_HOME/state/.watch.lock")"
   [[ "$output" == *"cannot wake you"* ]]
 }
 
 @test "a session without tmux does not clobber a live claim" {
   pane=$(live_pane)
-  printf '%s\n' "$pane" > "$RY_HOME/state/yardmaster.pane"
+  hold_yard "$RY_BACKEND" "$pane"
   run env -u TMUX_PANE ry-session-start.sh <<<'{}'
   [ "$status" -eq 0 ]
-  [ "$(cat "$RY_HOME/state/yardmaster.pane")" = "$pane" ]
+  [ "$(claim_target)" = "$pane" ]
   [[ "$output" == *"another yardmaster"* ]]
+}
+
+@test "a session on another backend is told the yard is held elsewhere" {
+  pane=$(live_pane)
+  hold_yard tmux "$pane"
+  RY_BACKEND=orca ORCA_TERMINAL_HANDLE=term_x run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"holds the yard on the tmux backend"* ]]
+  [ "$(claim_backend)" = tmux ]
+  [ "$(claim_target)" = "$pane" ]
+}
+
+@test "claiming the yard clears the per-backend files it replaced" {
+  printf 'stale\n' > "$RY_HOME/state/yardmaster.pane"
+  printf 'stale\n' > "$RY_HOME/state/yardmaster.orca"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [ ! -e "$RY_HOME/state/yardmaster.pane" ]
+  [ ! -e "$RY_HOME/state/yardmaster.orca" ]
+  [ "$(claim_target)" = "%7" ]
 }

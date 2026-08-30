@@ -71,9 +71,11 @@ ry_backend_send() {  # <id> <text>
 }
 
 # One session holds the yard at a time, and the claim is the terminal the
-# watcher nudges to wake it. Each backend names its own terminals, so it
-# answers three questions: which terminal am I, where does the claim live, and
-# is the terminal holding it still there.
+# watcher nudges to wake it. Each backend names its own terminals, so a claim
+# is a pair: which backend, and which terminal in it. Both live in one file,
+# state/yardmaster.claim, so the watcher reads one place no matter how many
+# backends exist — and so a yard opened in two backends is a visible collision
+# rather than two claims that never see each other.
 
 ry_backend_self() {  # -> this session's terminal id, empty if it has none
   case $(ry_backend) in
@@ -84,40 +86,48 @@ ry_backend_self() {  # -> this session's terminal id, empty if it has none
   esac
 }
 
-ry_backend_claim_file() {  # -> the file holding this backend's claim
-  case $(ry_backend) in
-    orca) printf '%s\n' "$(ry_home)/state/yardmaster.orca" ;;
-    cmux) printf '%s\n' "$(ry_home)/state/yardmaster.cmux" ;;
-    herdr) printf '%s\n' "$(ry_home)/state/yardmaster.herdr" ;;
-    *)    printf '%s\n' "$(ry_home)/state/yardmaster.pane" ;;
+ry_backend_claim_file() {  # -> the one file holding the yard claim
+  printf '%s\n' "$(ry_home)/state/yardmaster.claim"
+}
+
+ry_claim_get() {  # <field>: backend|target -> its value, empty if unclaimed
+  sed -n "s/^$1=//p" "$(ry_backend_claim_file)" 2>/dev/null | tail -n 1
+}
+
+ry_claim_write() {  # <backend> <target>
+  local st; st="$(ry_home)/state"
+  printf 'backend=%s\ntarget=%s\n' "$1" "$2" > "$(ry_backend_claim_file)"
+  # the per-backend files this replaced; leaving them would claim the yard twice
+  rm -f "$st/yardmaster.pane" "$st/yardmaster.orca" "$st/yardmaster.cmux" "$st/yardmaster.herdr"
+}
+
+ry_claim_alive() {  # <backend> <target>: is that terminal still there?
+  [ -n "${2:-}" ] || return 1
+  case $1 in
+    orca) command -v orca >/dev/null 2>&1 &&
+          orca terminal read --terminal "$2" --json >/dev/null 2>&1 ;;
+    cmux) ry_cmux_available && ry_cmux_alive "$2" ;;
+    herdr) ry_herdr_available && ry_herdr_alive "$2" ;;
+    *)    ry_tmux display -p -t "$2" '#{pane_id}' >/dev/null 2>&1 ;;
   esac
 }
 
-ry_backend_alive() {  # <terminal-id>: is that terminal still there?
-  [ -n "${1:-}" ] || return 1
-  case $(ry_backend) in
+ry_claim_send() {  # <backend> <target> <text>: best effort, never fails
+  case $1 in
     orca) command -v orca >/dev/null 2>&1 &&
-          orca terminal read --terminal "$1" --json >/dev/null 2>&1 ;;
-    cmux) ry_cmux_available && ry_cmux_alive "$1" ;;
-    herdr) ry_herdr_available && ry_herdr_alive "$1" ;;
-    *)    ry_tmux display -p -t "$1" '#{pane_id}' >/dev/null 2>&1 ;;
+          orca terminal send --terminal "$2" --text "$3" --enter --json >/dev/null 2>&1 ;;
+    cmux) ry_cmux_available && ry_cmux_send "$2" "$3" >/dev/null 2>&1 ;;
+    herdr) ry_herdr_available && ry_herdr_send "$2" "$3" >/dev/null 2>&1 ;;
+    *)    ry_tmux send-keys -t "$2" -l -- "$3" && ry_tmux send-keys -t "$2" Enter ;;
   esac
+  return 0
 }
 
 ry_backend_nudge() {  # <text>: best effort, never fails
-  local st pane handle ws hp; st="$(ry_home)/state"
-  pane=$(cat "$st/yardmaster.pane" 2>/dev/null || true)
-  handle=$(cat "$st/yardmaster.orca" 2>/dev/null || true)
-  ws=$(cat "$st/yardmaster.cmux" 2>/dev/null || true)
-  hp=$(cat "$st/yardmaster.herdr" 2>/dev/null || true)
-  if [ -n "$pane" ] && ry_tmux display -p -t "$pane" '#{pane_id}' >/dev/null 2>&1; then
-    ry_tmux send-keys -t "$pane" -l -- "$1" && ry_tmux send-keys -t "$pane" Enter
-  elif [ -n "$handle" ] && command -v orca >/dev/null; then
-    orca terminal send --terminal "$handle" --text "$1" --enter --json >/dev/null 2>&1 || true
-  elif [ -n "$ws" ] && ry_cmux_available; then
-    ry_cmux_send "$ws" "$1" >/dev/null 2>&1 || true
-  elif [ -n "$hp" ] && ry_herdr_available; then
-    ry_herdr_send "$hp" "$1" >/dev/null 2>&1 || true
-  fi
+  local backend target
+  backend=$(ry_claim_get backend); target=$(ry_claim_get target)
+  [ -n "$target" ] || return 0
+  ry_claim_alive "$backend" "$target" || return 0
+  ry_claim_send "$backend" "$target" "$1"
   return 0
 }

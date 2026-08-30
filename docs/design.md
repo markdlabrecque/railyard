@@ -129,16 +129,26 @@ settles *which* session holds the yard, because the identity is not the scarce
 thing — the inbox is. Two yardmasters sharing one inbox take work from each
 other, and neither is told.
 
-The claim is the terminal the watcher nudges, and each backend names its own:
-`state/yardmaster.pane` (a tmux `$TMUX_PANE`) or `state/yardmaster.orca` (an
-`$ORCA_TERMINAL_HANDLE`). A session claims it when the terminal is free,
-already its own, or held by one that has since died. Otherwise it is told who
-holds the yard and stands down. A session with no terminal at all holds
-nothing: it is told the watcher cannot wake it, so it reads the manifest itself
-rather than ending its turn to wait for a nudge that will never come.
+The claim is the terminal the watcher nudges. Each backend names its own
+terminals, so the claim is a pair — which backend, and which terminal in it —
+and both live in one file, `state/yardmaster.claim`:
 
-Because the claim file is per backend, running one yard in two backends at once
-defeats it — two claims, one inbox. A yard picks a backend and keeps it.
+```
+backend=tmux
+target=%3
+```
+
+A session claims it when the terminal is free, already its own, or held by one
+that has since died. Otherwise it is told who holds the yard and stands down. A
+session with no terminal at all holds nothing: it is told the watcher cannot
+wake it, so it reads the manifest itself rather than ending its turn to wait
+for a nudge that will never come.
+
+One file rather than one per backend is what makes a yard opened in two
+backends visible. When the claim names a backend other than this session's, the
+session is told exactly that and stands down, instead of writing a second claim
+that the first would never see. It also means the watcher reads one place to
+find the yardmaster, however many backends exist.
 
 ## More than one yard
 
