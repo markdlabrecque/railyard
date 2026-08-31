@@ -53,6 +53,42 @@ teardown() { pid=$(cat "$RY_HOME/state/.watch.lock" 2>/dev/null); [ -n "$pid" ] 
   grep -q -- "agent prompt pane-ym \[railyard\] engine $id turn-ended: DONE" "$RY_FAKE_HERDR_LOG"
 }
 
+# herdr knows an agent has gone blocked without the Stop hook. That does not
+# change the status-file contract: it only means the watcher raises the same
+# "this engine has stopped and said nothing" line at once instead of after
+# RY_STALL_MIN minutes.
+@test "watch raises a herdr-blocked engine at once, and only once" {
+  printf 'tab-ym pane-ym yardmaster\n' >> "$RY_FAKE_HERDR_TABS"
+  HERDR_PANE_ID=pane-ym ry-session-start.sh <<<'{}' >/dev/null
+  kill "$(cat "$RY_HOME/state/.watch.lock")"
+  id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
+  target=$(sed -n 's/^target=//p' "$RY_HOME/state/$id.meta")
+  printf '%s\n' "${target##*/pane:}" >> "$RY_FAKE_HERDR_BLOCKED"
+  run ry-watch.sh --once
+  [ "$status" -eq 0 ]
+  grep -q "engine $id waiting for input" "$RY_HOME/state/inbox.md"
+  ry-watch.sh --once
+  [ "$(grep -c "waiting for input" "$RY_HOME/state/inbox.md")" -eq 1 ]
+}
+
+@test "a herdr engine that is still working is not raised" {
+  id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
+  run ry-watch.sh --once
+  [ "$status" -eq 0 ]
+  ! grep -q "waiting for input" "$RY_HOME/state/inbox.md" 2>/dev/null
+}
+
+@test "an engine that has ended its turn is not also raised as blocked" {
+  id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
+  target=$(sed -n 's/^target=//p' "$RY_HOME/state/$id.meta")
+  printf '%s\n' "${target##*/pane:}" >> "$RY_FAKE_HERDR_BLOCKED"
+  RY_ID=$id ry-engine-stop.sh <<<"{\"transcript_path\":\"$BATS_TEST_DIRNAME/fixtures/transcript.jsonl\",\"stop_hook_active\":false}"
+  run ry-watch.sh --once
+  [ "$status" -eq 0 ]
+  ! grep -q "waiting for input" "$RY_HOME/state/inbox.md"
+  grep -q "turn-ended" "$RY_HOME/state/inbox.md"
+}
+
 @test "a second herdr session is told another yardmaster holds the yard" {
   printf 'tab-first pane-first yardmaster\n' >> "$RY_FAKE_HERDR_TABS"   # herdr still shows it
   HERDR_PANE_ID=pane-first ry-session-start.sh <<<'{}' >/dev/null

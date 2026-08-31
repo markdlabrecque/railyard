@@ -92,7 +92,8 @@ setup_orca() {
 setup_herdr() {
   export RY_BACKEND=herdr
   export RY_FAKE_HERDR_LOG="$BATS_TEST_TMPDIR/herdr.log" RY_FAKE_HERDR_TABS="$BATS_TEST_TMPDIR/herdr-tabs"
-  : > "$RY_FAKE_HERDR_TABS"
+  export RY_FAKE_HERDR_BLOCKED="$BATS_TEST_TMPDIR/herdr-blocked"
+  : > "$RY_FAKE_HERDR_TABS"; : > "$RY_FAKE_HERDR_BLOCKED"
   export PATH="$BATS_TEST_DIRNAME/fakebin:$PATH"
 }
 

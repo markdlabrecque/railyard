@@ -94,6 +94,22 @@ ry_backend_send() {  # <id> <text>
   esac
 }
 
+# A sixth question, and the only one a backend is allowed not to answer: has
+# this engine stopped and started waiting for input? The status-file contract
+# is unchanged — the engine's Stop hook is still what ends a turn — but a
+# backend that watches its own agents can say so seconds after it happens
+# rather than leaving the watcher to notice RY_STALL_MIN minutes of silence.
+# A backend that cannot tell says nothing, and the timer does the work.
+
+ry_backend_blocked() {  # <id>: true only when the backend positively says so
+  local target; target=$(ry_meta_get "$1" target 2>/dev/null) || return 1
+  [ -n "$target" ] || return 1
+  case $(ry_meta_get "$1" backend 2>/dev/null) in
+    herdr) ry_herdr_available && ry_herdr_blocked "$target" ;;
+    *) return 1 ;;
+  esac
+}
+
 # An engine is welded to the backend that launched it: its meta records that
 # backend and target, and peek, send and decouple only ever talk to that app.
 # So a yard whose engines are spread across two apps has engines it cannot

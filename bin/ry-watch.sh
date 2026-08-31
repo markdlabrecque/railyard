@@ -5,8 +5,9 @@
 #   0. queued tasks whose blockers have merged -> coupled (or flagged stranded)
 #   1. new lines in state/events.log -> one inbox line each, injected into the
 #      yardmaster's own terminal (tmux pane or Orca handle) when known;
-#   2. engines with status "running" untouched for RY_STALL_MIN minutes
-#      (default 20) -> one "silent" inbox line, once per engine;
+#   2. engines with status "running" that their backend reports blocked, or
+#      untouched for RY_STALL_MIN minutes (default 20) -> one inbox line, once
+#      per engine;
 #   3. engines with status "pr-open" -> ry-pr-poll.sh every RY_PR_POLL_SEC
 #      seconds (default 120); merged / failed checks surface as events.
 # The inbox (state/inbox.md) is the durable record; pane injection is a nudge.
@@ -65,6 +66,11 @@ pass() {
     fi
     [ "$status" = running ] || continue
     [ -e "$st/$id.stall-warned" ] && continue
+    if ry_backend_blocked "$id"; then
+      post "[railyard] engine $id waiting for input (its backend says the agent is blocked, no turn end); check window ry-$id"
+      : > "$st/$id.stall-warned"
+      continue
+    fi
     age=$(( (now - $(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f")) / 60 ))
     if [ "$age" -ge "$stall_min" ]; then
       post "[railyard] engine $id silent for ${age}m (status running, no turn end); check window ry-$id"
