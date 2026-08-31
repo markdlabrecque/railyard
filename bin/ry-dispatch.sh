@@ -5,7 +5,7 @@
 # With --after the task is only queued: no siding, no engine. It waits until
 # something couples it, so its siding is cut after its blockers have landed.
 #
-# usage: ry-dispatch.sh (--haul|--survey) [--mode local-only|pr|no-mistakes]
+# usage: ry-dispatch.sh (--haul|--survey) [--mode local-only|pr]
 #                       [--base <branch>] [--after <id>[,<id>...]]
 #                       <project> <waybill>
 # The base branch comes from --base, else the project's data/projects.md line,
@@ -37,12 +37,20 @@ done
 [ -n "$waybill" ] || ry_die "need <waybill>"
 case $shape in
   haul)   mode=${mode:-local-only}
-          case $mode in local-only|pr|no-mistakes) ;; *) ry_die "bad --mode '$mode'";; esac ;;
+          case $mode in
+            local-only|pr) ;;
+            # Deliver through the no-mistakes git proxy, which is not
+            # installed here: accepted once and implemented by nothing
+            # downstream, so the task could be dispatched and then never
+            # delivered. See docs/prd.md#future-plans.
+            no-mistakes) ry_die "--mode no-mistakes needs the no-mistakes tool, which is not wired in: nothing can deliver it. Use local-only or pr." ;;
+            *) ry_die "bad --mode '$mode' (local-only|pr)" ;;
+          esac ;;
   survey) [ -z "$mode" ] || [ "$mode" = none ] || ry_die "--mode does not apply to --survey"
           mode=none ;;
 esac
 
-ry_backend_check
+ry_backend_check; ry_backend_no_split
 home=$(ry_home)
 pdir=$(ry_project_dir "$project")
 git -C "$pdir" fetch -q origin

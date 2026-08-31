@@ -125,3 +125,53 @@ teardown() { teardown_tmux; }
   run ry-claim.sh --release
   [ "$status" -eq 0 ]
 }
+
+@test "--held is an exit code and nothing else" {
+  pane=$(live_pane)
+  hold_yard tmux "$pane"
+  run ry-claim.sh --held
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "--held exits 1 on an unclaimed yard" {
+  run ry-claim.sh --held
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+}
+
+@test "--held exits 1 when the holding terminal has closed" {
+  live_pane >/dev/null
+  hold_yard tmux %404
+  run ry-claim.sh --held
+  [ "$status" -eq 1 ]
+}
+
+@test "--json names the backend, the target and whether it is alive" {
+  pane=$(live_pane)
+  hold_yard tmux "$pane"
+  run ry-claim.sh --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.held' <<<"$output")" = true ]
+  [ "$(jq -r '.backend' <<<"$output")" = tmux ]
+  [ "$(jq -r '.target' <<<"$output")" = "$pane" ]
+  [ "$(jq -r '.alive' <<<"$output")" = true ]
+}
+
+@test "--json on an unclaimed yard is held false with null fields" {
+  run ry-claim.sh --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.held' <<<"$output")" = false ]
+  [ "$(jq -r '.backend' <<<"$output")" = null ]
+  [ "$(jq -r '.target' <<<"$output")" = null ]
+  [ "$(jq -r '.alive' <<<"$output")" = false ]
+}
+
+@test "--json reports a claim whose terminal has closed as held but not alive" {
+  live_pane >/dev/null
+  hold_yard herdr pane-gone
+  run ry-claim.sh --json
+  [ "$(jq -r '.held' <<<"$output")" = true ]
+  [ "$(jq -r '.backend' <<<"$output")" = herdr ]
+  [ "$(jq -r '.alive' <<<"$output")" = false ]
+}

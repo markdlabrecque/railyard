@@ -21,7 +21,7 @@ written for them. These are the ones written for you:
 | document | for | what it is |
 | --- | --- | --- |
 | [`docs/guide.md`](docs/guide.md) | you | how to use railyard day to day |
-| [`docs/design.md`](docs/design.md) | you, and agents | why it works this way |
+| [`docs/prd.md`](docs/prd.md) | you, and agents | every feature, and why it is built that way |
 | [`docs/test-plan.md`](docs/test-plan.md) | you | manual script for proving the loop on a real project |
 | [`CONTEXT.md`](CONTEXT.md) | everyone | the vocabulary — one meaning per term |
 | [`AGENTS.md`](AGENTS.md) | the yardmaster | its operating contract, loaded every turn |
@@ -44,6 +44,6 @@ bin/                    the ry-* scripts (every one takes -h)
 ## Tests
 
 ```sh
-bats tests              # 94 ok
+bats tests              # 172 ok
 shellcheck bin/ry-*.sh
 ```

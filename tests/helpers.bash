@@ -92,7 +92,8 @@ setup_orca() {
 setup_herdr() {
   export RY_BACKEND=herdr
   export RY_FAKE_HERDR_LOG="$BATS_TEST_TMPDIR/herdr.log" RY_FAKE_HERDR_TABS="$BATS_TEST_TMPDIR/herdr-tabs"
-  : > "$RY_FAKE_HERDR_TABS"
+  export RY_FAKE_HERDR_BLOCKED="$BATS_TEST_TMPDIR/herdr-blocked"
+  : > "$RY_FAKE_HERDR_TABS"; : > "$RY_FAKE_HERDR_BLOCKED"
   export PATH="$BATS_TEST_DIRNAME/fakebin:$PATH"
 }
 
@@ -101,4 +102,10 @@ claim_target() { sed -n 's/^target=//p' "$RY_HOME/state/yardmaster.claim" 2>/dev
 claim_backend() { sed -n 's/^backend=//p' "$RY_HOME/state/yardmaster.claim" 2>/dev/null; }
 hold_yard() {  # <backend> <target>
   printf 'backend=%s\ntarget=%s\n' "$1" "$2" > "$RY_HOME/state/yardmaster.claim"
+}
+
+# Record the yard's default backend in data/yard.md.
+register_yard_backend() {  # <backend>
+  mkdir -p "$RY_HOME/data"
+  printf '# This yard\n\n- `backend: %s`\n' "$1" > "$RY_HOME/data/yard.md"
 }

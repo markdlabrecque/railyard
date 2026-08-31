@@ -9,7 +9,7 @@ task, and keeps you in the loop for every decision that matters. You are the
 projects and never edits them — every change is an **engine's** job.
 
 Vocabulary is in [`../CONTEXT.md`](../CONTEXT.md); why it works this way is in
-[`design.md`](design.md). This is how to use it.
+[`prd.md`](prd.md). This is how to use it.
 
 ## Open the yard
 
@@ -44,10 +44,30 @@ Without that, both yards fight over the session named `railyard` and beta's
 engines open windows in alpha. `bin/ry-yard.sh --dry-run` shows what would
 start. Do not register the same project in two yards.
 
-## Running in Orca
+## Choosing this yard's backend
 
 tmux is the default; Orca, cmux and herdr are the other supported
-**backends** — the thing that hosts terminals. Railyard still owns everything
+**backends** — the thing that hosts terminals. Rather than remember
+`RY_BACKEND` in every shell, record it once in `data/yard.md`:
+
+```
+- `backend: herdr`
+```
+
+`bin/ry-yard.sh` then opens the yard there, and carries the choice into the
+yardmaster, so every engine it dispatches lands in the same app. `RY_BACKEND`
+in the environment still wins, so a one-off override works as before; with
+neither, the yard is a tmux yard.
+
+A yard runs on **one** backend at a time. An engine can only be reached
+through the app that launched it, so railyard refuses to open an engine beside
+engines in another app (`RY_ALLOW_SPLIT=1` overrides). To see a tmux yard from
+somewhere else, use `bin/ry-view.sh` — see below — rather than changing the
+line.
+
+## Running in Orca
+
+Orca, cmux and herdr each host a whole yard. Railyard still owns everything
 that matters (sidings, state, the watcher, the inbox); the backend only decides
 what window an engine appears in.
 
@@ -91,9 +111,16 @@ check gets it wrong:
 
 ```sh
 bin/ry-claim.sh                    # who holds the yard, and is that terminal still there
+bin/ry-claim.sh --held             # no output; exit 0 if a live terminal holds it
+bin/ry-claim.sh --json             # the same answer as fields
 bin/ry-claim.sh --release          # drop it, so the next session to start takes over
 bin/ry-claim.sh --take             # claim it for this session
 ```
+
+`--held` is the one for a shell prompt or a script — it answers with an exit
+code and says nothing, and a claim on a terminal that has since closed counts
+as not held. `--json` gives `held`, `backend`, `target` and `alive` for anything
+that has to parse the answer.
 
 A claim whose terminal has closed is dropped or taken freely — that is the
 normal case, and session start already handles it for you. The one to reach for
@@ -103,6 +130,22 @@ still reads alive, so add `--force`.
 So a yard picks a backend and stays on it. Start a session on a different
 backend while another holds the yard and it is told so at session start and
 stands down, rather than quietly claiming alongside it and sharing the inbox.
+
+Engines are held to the same rule, and this one is enforced rather than
+reported. An engine records the backend that launched it and can only ever be
+peeked at, sent to or decoupled through that app, so a yard with engines in two
+apps has engines that go dark the moment one of them is quit. Dispatching or
+coupling onto a second backend is refused:
+
+```
+error: this yard already has engines on herdr (xyz-0830-1412-3f9a), and tmux
+would split it. ...
+```
+
+Decouple those tasks first, or open the yard on the backend they are already
+on — or take the third option and host every engine in tmux, looking at it from
+the other app with `bin/ry-view.sh`. `RY_ALLOW_SPLIT=1` overrides the refusal
+for the case where the other app is gone and you want to carry on regardless.
 
 ## Running in cmux
 
@@ -144,6 +187,47 @@ Two things worth knowing:
   The pane is what peek and send talk to; the tab is what decouple closes.
   Nothing else in railyard has to care, but that is why the field looks
   different from the other backends'.
+- **herdr notices a stuck engine faster.** It watches the agent in each pane,
+  so when an engine stops without ending its turn the watcher raises it in
+  seconds rather than after `RY_STALL_MIN` minutes. Same inbox line, same once
+  per engine; on the other backends the timer still does the work.
+
+## Watching a tmux yard from another app
+
+The backends above each host a whole yard. There is a second way to use them:
+run the yard in tmux and let one of the others just *look* at it.
+
+```sh
+bin/ry-view.sh herdr      # one herdr tab attached to the tmux yard
+bin/ry-view.sh orca
+bin/ry-view.sh cmux
+```
+
+Each opens a single terminal running
+
+```
+tmux new-session -t railyard -s railyard-herdr
+```
+
+so the viewer joins the yard's session group — its own session, its own window
+size, the same windows. `--dry-run` prints that command without opening
+anything.
+
+Why this is worth having: the yardmaster and every engine stay in tmux, so the
+watcher's nudge works whether anyone is attached or not, and switching viewer
+changes no railyard state at all. Close the herdr tab, open the Orca one; no
+claim rewrite, no handover, nothing to migrate. The yardmaster does not notice.
+It also means the yard cannot get split across two apps: engines are only ever
+launched by the tmux yard.
+
+What it costs: the viewing app sees `tmux` in that terminal, not `claude`, so
+its native agent detection stays dark and its worktree-terminal features do not
+apply. That is fine — a viewer is not an engine. Railyard records no state for
+it, never sends to it, and the yardmaster's status comes from the Stop hook and
+the inbox either way.
+
+Viewer sessions clean themselves up on detach, and a second viewer on the same
+backend gets `railyard-herdr-2` rather than stealing the first one's client.
 
 ## Register a project
 
@@ -160,8 +244,8 @@ Then add a line to [`../data/projects.md`](../data/projects.md):
 `name` must match the directory under `projects/`. Both other fields are
 optional:
 
-- **mode** — how finished hauls are delivered: `local-only`, `pr`, or
-  `no-mistakes`. Defaults to `local-only`.
+- **mode** — how finished hauls are delivered: `local-only` or `pr`.
+  Defaults to `local-only`.
 - **base** — the branch sidings are cut from and merged back into. Defaults to
   `develop` when the project has one, otherwise the remote's default branch.
   Railyard never touches your release branch.
@@ -245,6 +329,10 @@ Two more session commands:
 **`engine <id> silent for Nm`** — a running engine ended no turn. Look at it:
 `bin/ry-peek.sh <id>`.
 
+**`engine <id> waiting for input`** — the same thing, spotted at once instead
+of waited out: the backend says that engine's agent is sitting at a prompt.
+Only herdr can tell railyard this today. Same response: `bin/ry-peek.sh <id>`.
+
 **`engine <id> blocked-stranded <blocker>`** — you decoupled a blocker that
 never merged, so nothing behind it can ever unblock. It is never started
 silently. Drop the task, or re-dispatch it without that blocker.
@@ -261,6 +349,7 @@ instructions into the engine's window; it keeps its context and carries on.
 | command | does |
 | --- | --- |
 | `bin/ry-yard.sh` | open or attach to the yard |
+| `bin/ry-view.sh [--dry-run] <herdr\|orca\|cmux>` | open a viewer onto a tmux-hosted yard |
 | `bin/ry-dispatch.sh --haul\|--survey [--mode <m>] [--base <b>] [--after <id>] <project> "<waybill>"` | dispatch or queue a task |
 | `bin/ry-manifest.sh` | every task not yet decoupled |
 | `bin/ry-inbox.sh [--ack]` | unread engine events |
@@ -273,6 +362,7 @@ instructions into the engine's window; it keeps its context and carries on.
 | `bin/ry-pr.sh <id>` | open the PR/MR |
 | `bin/ry-pr-poll.sh <id>` | check an open PR once, by hand |
 | `bin/ry-decouple.sh [--force] [--delete-branch] <id>` | remove the siding, archive the state |
+| `bin/ry-claim.sh [--held\|--json\|--release\|--take] [--force]` | look at, test, drop or take the yard claim |
 
 Every script takes `-h`.
 

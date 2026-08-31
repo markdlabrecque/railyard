@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Backend seam. RY_BACKEND=tmux (default) | orca | cmux | herdr | none. Every backend answers
+# Backend seam. tmux (default) | orca | cmux | herdr | none, from RY_BACKEND or
+# data/yard.md. Every backend answers
 # the same five questions: open an engine terminal, stop it, peek at it, send
 # it text, and nudge the yardmaster. The engine's backend and target are
 # recorded in its meta (backend=, target=) so later calls need no env.
@@ -12,16 +13,39 @@
 # shellcheck source=bin/ry-herdr-lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/ry-herdr-lib.sh"
 
-ry_backend() { printf '%s\n' "${RY_BACKEND:-tmux}"; }
+# Which app hosts this yard. RY_BACKEND wins, so the test suite and a one-off
+# override keep working; otherwise the yard says so itself in data/yard.md, the
+# way data/projects.md records a project's mode and base. A yard that records
+# nothing is a tmux yard.
+
+ry_backend_file() { printf '%s\n' "$(ry_home)/data/yard.md"; }
+
+ry_backend_recorded() {  # -> the backend data/yard.md names, empty if it names none
+  local f; f=$(ry_backend_file)
+  [ -f "$f" ] || return 0
+  grep -m1 -oE 'backend: *[A-Za-z][A-Za-z0-9_-]*' "$f" 2>/dev/null | sed 's/backend: *//'
+}
+
+ry_backend() {
+  if [ -n "${RY_BACKEND:-}" ]; then printf '%s\n' "$RY_BACKEND"; return; fi
+  local b; b=$(ry_backend_recorded)
+  printf '%s\n' "${b:-tmux}"
+}
+
+ry_backend_whence() {  # -> where the current answer came from, for error messages
+  if [ -n "${RY_BACKEND:-}" ]; then printf 'RY_BACKEND\n'
+  elif [ -n "$(ry_backend_recorded)" ]; then printf 'data/yard.md\n'
+  else printf 'the default\n'; fi
+}
 
 ry_backend_check() {
   case $(ry_backend) in
     tmux|none) ;;
-    orca) command -v orca >/dev/null || ry_die "RY_BACKEND=orca but the orca CLI is not installed" ;;
-    cmux) ry_cmux_available || ry_die "RY_BACKEND=cmux but the cmux CLI was not found" ;;
-    herdr) ry_herdr_available || ry_die "RY_BACKEND=herdr but the herdr CLI is not installed"
-           ry_herdr_running || ry_die "RY_BACKEND=herdr but no herdr server is running" ;;
-    *) ry_die "unknown RY_BACKEND '$(ry_backend)' (tmux|orca|cmux|herdr|none)" ;;
+    orca) command -v orca >/dev/null || ry_die "$(ry_backend_whence) says orca, but the orca CLI is not installed" ;;
+    cmux) ry_cmux_available || ry_die "$(ry_backend_whence) says cmux, but the cmux CLI was not found" ;;
+    herdr) ry_herdr_available || ry_die "$(ry_backend_whence) says herdr, but the herdr CLI is not installed"
+           ry_herdr_running || ry_die "$(ry_backend_whence) says herdr, but no herdr server is running" ;;
+    *) ry_die "unknown backend '$(ry_backend)' from $(ry_backend_whence) (tmux|orca|cmux|herdr|none)" ;;
   esac
 }
 
@@ -68,6 +92,50 @@ ry_backend_send() {  # <id> <text>
     herdr) ry_herdr_send "$target" "$2" ;;
     *) ry_die "engine $1 has no terminal" ;;
   esac
+}
+
+# A sixth question, and the only one a backend is allowed not to answer: has
+# this engine stopped and started waiting for input? The status-file contract
+# is unchanged — the engine's Stop hook is still what ends a turn — but a
+# backend that watches its own agents can say so seconds after it happens
+# rather than leaving the watcher to notice RY_STALL_MIN minutes of silence.
+# A backend that cannot tell says nothing, and the timer does the work.
+
+ry_backend_blocked() {  # <id>: true only when the backend positively says so
+  local target; target=$(ry_meta_get "$1" target 2>/dev/null) || return 1
+  [ -n "$target" ] || return 1
+  case $(ry_meta_get "$1" backend 2>/dev/null) in
+    herdr) ry_herdr_available && ry_herdr_blocked "$target" ;;
+    *) return 1 ;;
+  esac
+}
+
+# An engine is welded to the backend that launched it: its meta records that
+# backend and target, and peek, send and decouple only ever talk to that app.
+# So a yard whose engines are spread across two apps has engines it cannot
+# reach as soon as one of them is quit. Item 1's answer is to host every engine
+# in tmux and use bin/ry-view.sh to look at it from elsewhere; this is the guard
+# that makes the other case visible rather than silent.
+
+ry_backend_engines_elsewhere() {  # -> "<id> <backend>" for live engines on another backend
+  local home me f id b; home=$(ry_home); me=$(ry_backend)
+  for f in "$home"/state/*.meta; do
+    [ -f "$f" ] || continue
+    b=$(sed -n 's/^backend=//p' "$f" | tail -n 1)
+    { [ -n "$b" ] && [ "$b" != "$me" ]; } || continue
+    id=${f##*/}; printf '%s %s\n' "${id%.meta}" "$b"
+  done
+}
+
+ry_backend_no_split() {  # die rather than open an engine beside engines in another app
+  local rows others ids
+  case $(ry_backend) in none) return 0 ;; esac
+  [ -z "${RY_ALLOW_SPLIT:-}" ] || return 0
+  rows=$(ry_backend_engines_elsewhere)
+  [ -n "$rows" ] || return 0
+  others=$(awk '{print $2}' <<<"$rows" | sort -u | paste -sd, -)
+  ids=$(awk '{print $1}' <<<"$rows" | paste -sd, -)
+  ry_die "this yard already has engines on $others ($ids), and $(ry_backend) would split it. An engine can only be reached through the app that launched it, so half the yard would go dark the moment that app closed. Open the yard on $others instead, or decouple those tasks first — or host every engine in tmux and look at it from the other app with bin/ry-view.sh. RY_ALLOW_SPLIT=1 overrides."
 }
 
 # One session holds the yard at a time, and the claim is the terminal the

@@ -73,6 +73,19 @@ ry_herdr_send() {  # <target> <text>
   ry_herdr_ok "$(herdr pane send-keys "$pane" enter)"
 }
 
+# herdr watches the agent in a pane, so it knows an engine has stopped and is
+# waiting for input without the engine's Stop hook having fired. `agent wait`
+# with no time to wait is a poll: it answers now with the state it sees.
+# Anything unexpected — an old herdr, a pane it does not treat as an agent, a
+# socket error — means "cannot tell", never "blocked", because a false blocked
+# would raise an inbox line about a working engine.
+ry_herdr_blocked() {  # <target>
+  local out state
+  out=$(herdr agent wait "$(ry_herdr_pane "$1")" --until blocked --timeout 0 2>/dev/null) || return 1
+  state=$(jq -r '.result.state // .result.agent.state // empty' <<<"$out" 2>/dev/null) || return 1
+  [ "$state" = blocked ]
+}
+
 ry_herdr_alive() {  # <target>
   herdr pane get "$(ry_herdr_pane "$1")" 2>/dev/null | jq -e 'has("result")' >/dev/null 2>&1
 }

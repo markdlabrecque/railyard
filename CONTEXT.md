@@ -44,7 +44,7 @@ A read-only investigation that produces a report and never commits or pushes.
 _Avoid_: scout task, research task, spike, investigation
 
 **Mode**:
-How a completed haul is delivered — `local-only`, `pr`, or `no-mistakes`. Applies
+How a completed haul is delivered — `local-only` or `pr`. Applies
 to hauls only; a survey has no mode. Distinct from **Shape**.
 _Avoid_: delivery method, strategy
 
@@ -77,7 +77,7 @@ never touches the release branch; releases are cut outside it.
 _Avoid_: default branch, target branch, trunk, main
 
 **Yard**:
-The whole railyard installation, and the terminals it runs in — a tmux session named `railyard` by default, or Orca terminals / cmux workspaces / herdr tabs when `RY_BACKEND` says so.
+The whole railyard installation, and the terminals it runs in — a tmux session named `railyard` by default, or Orca terminals / cmux workspaces / herdr tabs when `data/yard.md` or `RY_BACKEND` says so.
 
 ### Actions
 
