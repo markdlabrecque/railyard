@@ -44,9 +44,23 @@ fi
 
 mkdir -p "$home/yard/$project"
 git -C "$pdir" worktree add -q -b "$branch" "$siding" "$start"
+
+# Before the engine — or any start script it runs — can reach ddev, give the
+# siding its own DDEV project name. Silent no-op for a project without .ddev/.
+prefix=$(ry_meta_get "$id" prefix); [ -n "$prefix" ] || prefix=${id##*-}
+if ! ddev_name=$(ry_ddev_write_override "$siding" "$project" "$prefix"); then
+  # Nothing half-cut: undo the worktree so the task stays queued and can be
+  # coupled again once the project's .gitignore is fixed.
+  git -C "$pdir" worktree remove --force "$siding" 2>/dev/null || true
+  git -C "$pdir" worktree prune
+  git -C "$pdir" branch -q -D "$branch" 2>/dev/null || true
+  exit 1
+fi
+
 ry_set_status "$id" dispatched
 
 if [ "$(ry_backend)" != none ]; then
   "$(dirname "$0")/ry-engine-launch.sh" "$id" >/dev/null
 fi
 printf 'coupled %s to %s (from %s)\n' "$id" "$siding" "$start"
+[ -z "$ddev_name" ] || printf 'ddev=%s\n' "$ddev_name"
