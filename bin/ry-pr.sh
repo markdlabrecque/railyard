@@ -34,8 +34,17 @@ if [ -z "$title" ]; then
 fi
 body=$(printf '%s\n\nCommits:\n%s\n' "$(cat "$home/state/$id.waybill.md")" "$(git -C "$siding" log --format='- %s' "origin/$base..HEAD" --)")
 
-git -C "$siding" push -q -u origin "$branch"
+# The forge is detected, and its CLI checked, before the push: a missing gh or
+# glab must not leave a pushed branch behind with no PR to go with it. Checked
+# per forge, so a GitHub-only machine is never told to install glab.
 forge=$(ry_forge "$siding")
+case $forge in
+  github) ry_require gh ;;
+  gitlab) ry_require glab ;;
+  *) ry_die "unknown forge '$forge'" ;;
+esac
+
+git -C "$siding" push -q -u origin "$branch"
 case $forge in
   github) url=$(cd "$siding" && gh pr create --base "$base" --head "$branch" --title "$title" --body "$body") ;;
   gitlab) url=$(cd "$siding" && glab mr create --source-branch "$branch" --target-branch "$base" --title "$title" --description "$body" --yes) ;;

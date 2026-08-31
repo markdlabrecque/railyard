@@ -25,6 +25,21 @@ ry_env_exports() {  # -> "K=v ..." the railyard vars a child session must inheri
 
 ry_die() { printf 'error: %s\n' "$*" >&2; exit "${RY_EXIT:-1}"; }
 
+ry_mtime() {  # <file> -> its mtime as a unix timestamp
+  # GNU first, and the order matters. On GNU, `-f` means --file-system, where
+  # `%m` is not a valid directive: it prints a placeholder and exits 0, so a
+  # BSD-first fallback never fires and the caller does arithmetic on junk. BSD
+  # has no `-c` at all and exits non-zero, so this order fails over on both.
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"
+}
+
+ry_require() {  # <cmd>...: die naming everything missing, not just the first
+  local c missing=()
+  for c in "$@"; do command -v "$c" >/dev/null 2>&1 || missing+=("$c"); done
+  [ ${#missing[@]} -eq 0 ] && return 0
+  ry_die "railyard needs ${missing[*]}, and $([ ${#missing[@]} -eq 1 ] && echo "it is" || echo "they are") not on PATH. Install with 'brew install ${missing[*]}' or 'apt install ${missing[*]}'."
+}
+
 ry_new_id() {  # <project> -> e.g. xyz-0830-1412-3f9a
   local p=$1 rand
   rand=$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')

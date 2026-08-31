@@ -44,6 +44,9 @@ bin/                    the ry-* scripts (every one takes -h)
 ## Tests
 
 ```sh
-bats tests              # 172 ok
+bats tests              # 179 ok
 shellcheck bin/ry-*.sh
 ```
+
+Runs on macOS and Linux. Needs `bash`, `git` and `jq`; `gh` or `glab` for PR
+mode, and `tmux` unless you host the yard in another app.

@@ -14,6 +14,7 @@ id=${1:-}; [ -n "$id" ] || ry_die "need <id>"
 home=$(ry_home); st="$home/state"
 url=$(ry_meta_get "$id" pr_url); forge=$(ry_meta_get "$id" forge); siding=$(ry_meta_get "$id" siding)
 [ -n "$url" ] || ry_die "no PR recorded for $id"
+case $forge in github) ry_require gh jq ;; gitlab) ry_require glab jq ;; esac
 
 event() { printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$id" "$*" >> "$st/events.log"; }
 

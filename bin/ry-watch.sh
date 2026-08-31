@@ -71,7 +71,7 @@ pass() {
       : > "$st/$id.stall-warned"
       continue
     fi
-    age=$(( (now - $(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f")) / 60 ))
+    age=$(( (now - $(ry_mtime "$f")) / 60 ))
     if [ "$age" -ge "$stall_min" ]; then
       post "[railyard] engine $id silent for ${age}m (status running, no turn end); check window ry-$id"
       : > "$st/$id.stall-warned"

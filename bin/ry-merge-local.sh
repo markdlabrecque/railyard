@@ -8,6 +8,7 @@ set -euo pipefail
 . "$(dirname "$0")/ry-lib.sh"
 case ${1:-} in -h|--help) ry_usage "$0"; exit 0 ;; esac
 
+ry_require git
 push=0 id=""
 for a in "$@"; do case $a in --push) push=1;; -*) ry_die "unknown flag $a";; *) id=$a;; esac; done
 [ -n "$id" ] || ry_die "need <id>"
