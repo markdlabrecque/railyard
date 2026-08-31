@@ -27,13 +27,18 @@ if [ -n "$held" ] && ! ry_claim_alive "$held_backend" "$held"; then
   held=""; held_backend=""   # the terminal that held the yard is gone
 fi
 
+# The claim we would be standing down to is a live terminal, so handing the
+# yard over needs --force. Print the whole line: a stood-down session should
+# not have to go looking for the one command that could change its standing.
+take="bin/ry-claim.sh --take --force"
+
 if [ -n "$self" ] && { [ -z "$held" ] || { [ "$held" = "$self" ] && [ "$held_backend" = "$backend" ]; }; }; then
   ry_claim_write "$backend" "$self"
   standing="you are the yardmaster."
 elif [ -n "$held" ] && [ "$held_backend" != "$backend" ]; then
-  standing="another yardmaster holds the yard on the $held_backend backend ($held), and this session is on $backend. One yard runs on one backend — do not dispatch or act on the inbox. Ask the dispatcher which backend this yard should use."
+  standing="another yardmaster holds the yard on the $held_backend backend ($held), and this session is on $backend. One yard runs on one backend — do not dispatch or act on the inbox. Ask the dispatcher which backend this yard should use; on their word, $take."
 elif [ -n "$held" ]; then
-  standing="another yardmaster holds the yard ($held). Do not dispatch or act on the inbox — you would take work from it. Ask the dispatcher before taking over."
+  standing="another yardmaster holds the yard ($held). Do not dispatch or act on the inbox — you would take work from it. Ask the dispatcher before taking over; on their word, $take."
 else
   standing="you are the yardmaster, but no terminal holds the yard, so the watcher cannot wake you. Check bin/ry-manifest.sh yourself instead of ending your turn to wait."
 fi

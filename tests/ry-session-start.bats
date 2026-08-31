@@ -20,6 +20,8 @@ teardown() {
   TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
   [ "$status" -eq 0 ]
   [[ "$output" == *"you are the yardmaster"* ]]
+  # nothing to take: the take line belongs only to a session that stood down
+  [[ "$output" != *"ry-claim.sh"* ]]
 }
 
 @test "reclaiming from the same pane is not a collision" {
@@ -38,6 +40,8 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"another yardmaster"* ]]
   [[ "$output" == *"$pane"* ]]
+  # a stood-down session is handed the one command that could change its standing
+  [[ "$output" == *"bin/ry-claim.sh --take --force"* ]]
   [ "$(claim_target)" = "$pane" ]
 }
 
@@ -72,6 +76,7 @@ teardown() {
   RY_BACKEND=orca ORCA_TERMINAL_HANDLE=term_x run ry-session-start.sh <<<'{}'
   [ "$status" -eq 0 ]
   [[ "$output" == *"holds the yard on the tmux backend"* ]]
+  [[ "$output" == *"bin/ry-claim.sh --take --force"* ]]
   [ "$(claim_backend)" = tmux ]
   [ "$(claim_target)" = "$pane" ]
 }
