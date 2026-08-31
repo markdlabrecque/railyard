@@ -29,6 +29,14 @@ setup_tmux() {
 }
 teardown_tmux() { tmux -L "$RY_TMUX_SOCKET" kill-server 2>/dev/null || true; }
 
+# A live pane to hold the yard against. Needs setup_tmux to have run in the
+# test itself: called from $(...) it would set the private socket in a subshell
+# and the test would go on to talk to the user's own tmux server.
+live_pane() {
+  tmux -L "$RY_TMUX_SOCKET" new-session -d -s held "sleep 30"
+  tmux -L "$RY_TMUX_SOCKET" display -p -t held '#{pane_id}'
+}
+
 # Add a branch to a project's fake remote (and fetch it into the clone).
 make_branch() {
   local name=$1 branch=$2 dir

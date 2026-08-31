@@ -1,16 +1,9 @@
 #!/usr/bin/env bats
 load helpers
-setup() { setup_home; }
+setup() { setup_home; setup_tmux; }
 teardown() {
   pid=$(cat "$RY_HOME/state/.watch.lock" 2>/dev/null); [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
   teardown_tmux
-}
-
-# A live pane to hold the yard against.
-live_pane() {
-  setup_tmux
-  tmux -L "$RY_TMUX_SOCKET" new-session -d -s held "sleep 30"
-  tmux -L "$RY_TMUX_SOCKET" display -p -t held '#{pane_id}'
 }
 
 @test "session start records the pane, starts one watcher, prints a summary" {
@@ -49,7 +42,6 @@ live_pane() {
 }
 
 @test "a session takes the yard when the holding pane is gone" {
-  setup_tmux
   hold_yard "$RY_BACKEND" "%404"
   TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
   [ "$status" -eq 0 ]

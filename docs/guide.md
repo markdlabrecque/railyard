@@ -86,6 +86,20 @@ backend=tmux
 target=%3
 ```
 
+`bin/ry-claim.sh` shows who holds it, and hands it over when the automatic
+check gets it wrong:
+
+```sh
+bin/ry-claim.sh                    # who holds the yard, and is that terminal still there
+bin/ry-claim.sh --release          # drop it, so the next session to start takes over
+bin/ry-claim.sh --take             # claim it for this session
+```
+
+A claim whose terminal has closed is dropped or taken freely — that is the
+normal case, and session start already handles it for you. The one to reach for
+this over is the agent that quit while its terminal stayed open: the claim
+still reads alive, so add `--force`.
+
 So a yard picks a backend and stays on it. Start a session on a different
 backend while another holds the yard and it is told so at session start and
 stands down, rather than quietly claiming alongside it and sharing the inbox.
