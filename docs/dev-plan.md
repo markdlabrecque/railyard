@@ -1,10 +1,10 @@
-# What is left to build
+# What was left to build
 
-*For the dispatcher. Six items, none of them blocking anything; the first
-three are now built and are kept here as the record of what shipped and why.
-Written after the v0.2.0 release, ordered by how much each one changes a working day rather
-than by how hard it is. Backend design: [`design.md`](design.md#backends);
-what the backends work already shipped: [`backends-plan.md`](backends-plan.md).*
+*For the dispatcher. Six items, written after the v0.2.0 release and ordered by
+how much each one changed a working day rather than by how hard it was. All six
+are now closed — five built, one dropped — and this file is kept as the record
+of what shipped and why. Backend design: [`design.md`](design.md#backends); the
+backends work: [`backends-plan.md`](backends-plan.md). Nothing here is pending.*
 
 ## 1. `ry-view.sh` — shipped
 
@@ -60,40 +60,71 @@ has since closed, which is not a held yard. `--json` answers the same question
 as `held`, `backend`, `target` and `alive` fields. Covered by
 `tests/ry-claim.bats`.*
 
-## 4. A default backend per yard
+## 4. A default backend per yard — shipped
 
-Four backends, and nothing records which one a yard should use except
-`RY_BACKEND` in whatever shell you happen to be in. Since v0.2.0 a mismatch is
-at least *reported* — the claim names its backend and a session on another one
-is told to stand down — but you still set the variable by hand every time, and
-getting it wrong is a stood-down session rather than a running yard.
+*Built. `data/yard.md` records the yard's backend on a `backend:` line;
+`ry_backend()` reads it when `RY_BACKEND` is unset, and falls back to `tmux`
+when neither says anything. Covered by `tests/ry-yard-backend.bats`; described
+in [`guide.md`](guide.md#choosing-this-yards-backend).*
 
-Record it in the yard instead, the way `data/projects.md` records a project's
-mode and base. `ry_backend()` in `bin/ry-backend-lib.sh` is the only place that
-reads the default, so this is one function plus a file.
+Four backends, and nothing recorded which one a yard should use except
+`RY_BACKEND` in whatever shell you happened to be in. Since v0.2.0 a mismatch
+was at least *reported* — the claim names its backend and a session on another
+one is told to stand down — but you still set the variable by hand every time,
+and getting it wrong was a stood-down session rather than a running yard.
 
-Keep the environment winning over the file: the test suite sets
-`RY_BACKEND=none` and every backend test overrides it per file.
+It is recorded in the yard now, the way `data/projects.md` records a project's
+mode and base, and it cost what the plan predicted: one function plus a file.
+The environment still wins over the file, deliberately — the test suite runs on
+`RY_BACKEND=none` and every backend test overrides it per file, and a one-off
+run in another app should not have to edit the yard.
 
-Effort: S, 1–2h.
+The one thing added beyond the plan: backend errors now say where the answer
+came from (`RY_BACKEND`, `data/yard.md`, or the default), because a typo in a
+file you set months ago should not read as a typo in your shell.
 
-## 5. `no-mistakes` delivery mode
+## 5. `no-mistakes` delivery mode — dropped
 
-`bin/ry-dispatch.sh` accepts `--mode no-mistakes` and writes it into the task's
-meta. Nothing downstream implements it: `bin/ry-merge-local.sh` refuses any
-mode but `local-only`, and `bin/ry-pr.sh` handles `pr`. So the mode can be
-dispatched and then cannot be delivered.
+*Decided. `bin/ry-dispatch.sh` refuses `--mode no-mistakes` with a message
+naming the modes that work. The mode is gone from the usage line, from
+`data/projects.md`, and from the guide. Covered by `tests/ry-dispatch.bats`.*
 
-That is the whole problem, and it is a design question before it is a coding
-one: decide what the mode promises, or drop it from the usage line and the
-validation until it means something.
+This was the one item the plan posed as a question rather than a task: decide
+what the mode promises, or drop it until it means something. It is dropped.
 
-Effort: unknown until it is defined.
+The problem was never that the mode was unimplemented — plenty is. It was that
+dispatch *accepted* it and wrote it into the task's meta, while
+`bin/ry-merge-local.sh` takes only `local-only` and `bin/ry-pr.sh` only `pr`.
+A no-mistakes haul could be dispatched, run, finish, and then have no way to be
+delivered. A mode that can be chosen and not honoured is worse than one that
+does not exist, and the fix that costs nothing is to stop accepting it.
 
-## 6. herdr `agent wait --until blocked`
+What it would have to mean before it comes back: something a delivery mode can
+actually gate — a verification pass an engine's own tests do not cover, or a
+second engine reviewing the first — not a stricter feeling about the same
+merge. Reversing this is a one-line re-add to the `case` in
+`bin/ry-dispatch.sh` once that is settled.
 
-herdr can tell the watcher an engine has gone blocked without going through the
-Stop hook. Noted while building the herdr backend and deliberately left alone —
-the status-file contract is the same for every backend, and one backend knowing
-better is a reason to think, not a reason to special-case. An option, not a
-pending task.
+## 6. herdr `agent wait --until blocked` — shipped
+
+*Built, narrowly. `ry_backend_blocked()` in `bin/ry-backend-lib.sh` is a
+backend question every backend may decline; only herdr answers it, via
+`ry_herdr_blocked()`. The watcher uses it to raise its existing "running, and
+silent" inbox line at once instead of after `RY_STALL_MIN` minutes. Covered by
+`tests/ry-herdr.bats`.*
+
+The plan's warning was the design: one backend knowing better is a reason to
+think, not a reason to special-case. The tempting version — let herdr report
+turn ends — would have given one backend its own path into the status file, and
+the contract's whole value is that every backend writes it the same way.
+
+So the question herdr answers is narrower than the one it *could* answer. Not
+"has this engine finished", which is the Stop hook's to answer and stays that
+way, but "is this engine sitting at a prompt right now". That changes no state
+and adds no event kind; it only decides how quickly an existing inbox line is
+raised. Backends that cannot tell return false and the twenty-minute timer does
+the work, exactly as before.
+
+Anything unexpected from herdr — an old CLI, a pane it does not treat as an
+agent, a socket error — reads as "cannot tell" rather than "blocked", because a
+false blocked would wake the yardmaster about an engine that is working.
