@@ -1,0 +1,97 @@
+name: checks
+
+# Advisory only: nothing here is a required check. A test failure or an
+# error-severity shellcheck finding fails the build; shellcheck warnings are
+# reported without failing it.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Which PRs get checked, decided in plain shell so every run prints the
+  # branches it read and the answer it gave. A release merge (develop -> main)
+  # carries content that was already checked on its way into develop, so it is
+  # skipped; anything the gate cannot read runs the checks rather than silently
+  # skipping them.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - id: decide
+        env:
+          PR_BASE: ${{ github.base_ref }}
+          PR_HEAD: ${{ github.head_ref }}
+        run: |
+          echo "pull request: ${PR_HEAD:-<unread>} -> ${PR_BASE:-<unread>}"
+          if [ -z "$PR_BASE" ] || [ -z "$PR_HEAD" ]; then
+            echo "::warning::could not read this PR's branches; running the checks anyway"
+            run=true
+          elif [ "$PR_BASE" = main ] && [ "$PR_HEAD" = develop ]; then
+            run=false
+          else
+            run=true
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "checks will run: $run"
+
+  checks:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # bin/ is BSD/macOS-first and has to run on Linux too: sed, grep, awk
+        # and stat differ at runtime, which is what tests/ry-portability.bats
+        # and tests/fakebin-{bsd,gnu}/ exist to pin down.
+        os: [macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      # tests/fakebin/ fakes claude, cmux, gh, glab, herdr and orca, but not
+      # tmux: setup_tmux() in tests/helpers.bash opens a real tmux server on a
+      # private socket. No network access and no credentials are needed.
+      # bats must be 1.4 or newer; the suite uses BATS_TEST_TMPDIR.
+      - name: Install bats, jq, shellcheck and tmux (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bats jq shellcheck tmux
+
+      - name: Install bats, jq, shellcheck and tmux (macOS)
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: |
+          for f in bats-core jq shellcheck tmux; do
+            brew list --versions "$f" >/dev/null || brew install "$f"
+          done
+
+      - name: Versions
+        run: |
+          bash --version | head -1
+          bats --version
+          shellcheck --version | sed -n '2p'
+          tmux -V
+          jq --version
+
+      - name: shellcheck bin/ (errors)
+        run: shellcheck --severity=error bin/*.sh
+
+      # Advisory: warning-level findings are visible in the log but do not fail
+      # the build. bin/ is clean at this severity today, so tightening the gate
+      # later is a one-line change to the step above.
+      - name: shellcheck bin/ (warnings, advisory)
+        continue-on-error: true
+        run: shellcheck --severity=warning bin/*.sh
+
+      - name: bats tests/
+        run: bats tests/
