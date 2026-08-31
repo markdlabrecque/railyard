@@ -50,6 +50,7 @@ case $shape in
           mode=none ;;
 esac
 
+ry_require git jq
 ry_backend_check; ry_backend_no_split
 home=$(ry_home)
 pdir=$(ry_project_dir "$project")

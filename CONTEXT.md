@@ -104,6 +104,13 @@ _Avoid_: teardown, cleanup, close, finish
 The end-of-session knowledge sweep that appends durable lessons to `data/learnings.md`.
 _Avoid_: stow, retro, wrap-up
 
+**Promote**:
+To move a filed learning out of `data/learnings.md` and into something that
+enforces it — the engine preamble, `AGENTS.md`, a project's `data/projects.md`
+line, or a check in a script. The only way a learning survives its queue; every
+line not promoted in that pass is dropped. Needs the dispatcher's word.
+_Avoid_: file, keep, save, adopt
+
 **Allaboard**:
 The session recap: what happened, and which decisions are still open.
 _Avoid_: ahoy, summary, standup
