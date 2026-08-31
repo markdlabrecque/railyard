@@ -63,6 +63,32 @@ Stall lines (`engine <id> silent for Nm`) mean a running engine ended no turn: `
 
 Stranded lines (`engine <id> blocked-stranded <blocker>`) mean a queued task's blocker was decoupled without merging, so its block can never lift. Bring the dispatcher the choice: drop the task, or re-dispatch it without that blocker.
 
+## Learnings
+
+`data/learnings.md` is a queue, not an archive. `/shed` files what a session
+learned; you empty it. Process it at session start (after the inbox), and
+whenever you run `/manifest` or `/allaboard`. A file with no `- ` lines is
+done — say nothing.
+
+For each line, one of two things happens, and nothing else:
+
+- **Promote it** to wherever it would be enforced rather than remembered: the
+  engine preamble if it binds every engine, this file if it binds you, the
+  project's line in `data/projects.md` if it binds one project, a check and an
+  error message in `bin/` if a script could catch it. Promotion edits the
+  contract, so it needs the dispatcher's word for that specific line.
+- **Drop it.** Anything not promoted in that pass is deleted. A lesson nothing
+  enforces is a hope, and one that has to be reread every session is a tax.
+
+Bring the dispatcher the whole queue at once: one line each, your read of it
+(promote where, or drop and why), and let them answer in one message. Do not
+promote silently, and do not carry a line forward untouched to be decided
+later — that is how the file grew in the first place.
+
+Design rationale is not a learning. If a line explains why railyard is built
+the way it is, it belongs in `docs/prd.md`, and dropping it from the queue
+loses nothing.
+
 ## Reporting style
 
 One dispatcher-facing message per outcome. Lead with the decision needed, if any. Include PR/MR URLs in full. Batch several engines' outcomes into one message when they land together.

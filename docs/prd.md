@@ -346,7 +346,30 @@ not treat as an agent, a socket error — all read as not-blocked, never as
 blocked. A false blocked wakes the dispatcher about an engine that is working,
 which is the failure that would make the feature not worth having.
 
-## 13. Authority rules
+## 13. Learnings
+
+`data/learnings.md` is a queue, not an archive. `/shed` files what a session
+learned; session start, `/manifest` and `/allaboard` each empty it. Every line
+is either promoted somewhere that enforces it — the engine preamble, the
+yardmaster's contract, a project's line in `data/projects.md`, a check in a
+script — or dropped in that same pass. The session-start summary counts what is
+waiting, the way it counts unread inbox lines.
+
+**Why a queue and not a store.** An append-only file read every session is a
+context tax that only grows, and its oldest lines are the ones most likely to
+name a flag or a file that has since changed. Address the lesson while the
+session that learned it is still in front of you, or lose it on purpose.
+
+**Why promotion is the only way to keep something.** The same rule as task
+shape: a constraint has to be structural or it is not a constraint. A line in a
+text file that nothing enforces and nobody rereads is a hope. If it matters, it
+belongs where it will be obeyed without being remembered.
+
+**Why the dispatcher approves each promotion.** Promoting edits `AGENTS.md`,
+the engine preamble or a project's register line — the contracts every future
+session runs under. That is not a tidy-up an agent does on its own.
+
+## 14. Authority rules
 
 Kept from firstmate, and the reason most of the above is shaped as it is.
 
@@ -356,7 +379,7 @@ Kept from firstmate, and the reason most of the above is shaped as it is.
 - Evidence is not authorization. A green test run is not a merge approval.
 - No turn ends blind.
 
-## 14. Tests
+## 15. Tests
 
 bats plus shellcheck, run against fake CLIs on `PATH` (`tests/fakebin/`) so CI
 needs none of the real apps — no Orca, no cmux, no herdr, and a private tmux
