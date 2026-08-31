@@ -20,6 +20,8 @@ home=$(ry_home)
 [ "$(cat "$home/state/$id.status" 2>/dev/null || true)" = queued ] \
   || ry_die "$id is not queued; only a queued task can be coupled"
 
+ry_backend_no_split
+
 project=$(ry_meta_get "$id" project); base=$(ry_meta_get "$id" base)
 branch=$(ry_meta_get "$id" branch);   siding=$(ry_meta_get "$id" siding)
 pdir=$(ry_project_dir "$project")

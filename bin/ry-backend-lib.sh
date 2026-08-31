@@ -70,6 +70,34 @@ ry_backend_send() {  # <id> <text>
   esac
 }
 
+# An engine is welded to the backend that launched it: its meta records that
+# backend and target, and peek, send and decouple only ever talk to that app.
+# So a yard whose engines are spread across two apps has engines it cannot
+# reach as soon as one of them is quit. Item 1's answer is to host every engine
+# in tmux and use bin/ry-view.sh to look at it from elsewhere; this is the guard
+# that makes the other case visible rather than silent.
+
+ry_backend_engines_elsewhere() {  # -> "<id> <backend>" for live engines on another backend
+  local home me f id b; home=$(ry_home); me=$(ry_backend)
+  for f in "$home"/state/*.meta; do
+    [ -f "$f" ] || continue
+    b=$(sed -n 's/^backend=//p' "$f" | tail -n 1)
+    { [ -n "$b" ] && [ "$b" != "$me" ]; } || continue
+    id=${f##*/}; printf '%s %s\n' "${id%.meta}" "$b"
+  done
+}
+
+ry_backend_no_split() {  # die rather than open an engine beside engines in another app
+  local rows others ids
+  case $(ry_backend) in none) return 0 ;; esac
+  [ -z "${RY_ALLOW_SPLIT:-}" ] || return 0
+  rows=$(ry_backend_engines_elsewhere)
+  [ -n "$rows" ] || return 0
+  others=$(awk '{print $2}' <<<"$rows" | sort -u | paste -sd, -)
+  ids=$(awk '{print $1}' <<<"$rows" | paste -sd, -)
+  ry_die "this yard already has engines on $others ($ids), and $(ry_backend) would split it. An engine can only be reached through the app that launched it, so half the yard would go dark the moment that app closed. Open the yard on $others instead, or decouple those tasks first — or host every engine in tmux and look at it from the other app with bin/ry-view.sh. RY_ALLOW_SPLIT=1 overrides."
+}
+
 # One session holds the yard at a time, and the claim is the terminal the
 # watcher nudges to wake it. Each backend names its own terminals, so a claim
 # is a pair: which backend, and which terminal in it. Both live in one file,
