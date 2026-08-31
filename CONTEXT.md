@@ -44,7 +44,7 @@ A read-only investigation that produces a report and never commits or pushes.
 _Avoid_: scout task, research task, spike, investigation
 
 **Mode**:
-How a completed haul is delivered — `local-only`, `pr`, or `no-mistakes`. Applies
+How a completed haul is delivered — `local-only` or `pr`. Applies
 to hauls only; a survey has no mode. Distinct from **Shape**.
 _Avoid_: delivery method, strategy
 

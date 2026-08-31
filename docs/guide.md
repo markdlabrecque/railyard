@@ -220,8 +220,8 @@ Then add a line to [`../data/projects.md`](../data/projects.md):
 `name` must match the directory under `projects/`. Both other fields are
 optional:
 
-- **mode** — how finished hauls are delivered: `local-only`, `pr`, or
-  `no-mistakes`. Defaults to `local-only`.
+- **mode** — how finished hauls are delivered: `local-only` or `pr`.
+  Defaults to `local-only`.
 - **base** — the branch sidings are cut from and merged back into. Defaults to
   `develop` when the project has one, otherwise the remote's default branch.
   Railyard never touches your release branch.

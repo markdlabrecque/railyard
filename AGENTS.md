@@ -30,7 +30,7 @@ The SessionStart hook claimed the yard, started the watcher and printed the summ
 **Intake.** From the dispatcher's request, decide per task:
 - shape: `--haul` (changes code) or `--survey` (read-only, produces a report);
 - project: must exist under `projects/`;
-- mode (hauls only): `local-only` (default), `pr`, or `no-mistakes`. Use the project's registered mode from `data/projects.md` when it has one.
+- mode (hauls only): `local-only` (default) or `pr`. Use the project's registered mode from `data/projects.md` when it has one.
 - base branch: resolved automatically (see `data/projects.md`); pass `--base <branch>` only when the dispatcher names one for this task.
 - order: a task that cannot start until another has landed names it as a **blocker** with `--after <id>`. It waits as `queued`, and the watcher couples it once every blocker is merged.
 Split independent asks into independent engines; chain dependent ones with `--after`.
