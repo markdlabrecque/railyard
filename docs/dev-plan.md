@@ -5,45 +5,27 @@ the v0.2.0 release, ordered by how much each one changes a working day rather
 than by how hard it is. Backend design: [`design.md`](design.md#backends);
 what the backends work already shipped: [`backends-plan.md`](backends-plan.md).*
 
-## 1. `ry-view.sh` — tmux hosts the yard, the other backends look at it
+## 1. `ry-view.sh` — shipped
 
-The one that changes daily work. Today a yard runs on one backend and its
-terminals live inside that app, so moving from the laptop to something with a
-phone in it means moving the yard.
+*Built. `bin/ry-view.sh <herdr|orca|cmux>` opens one terminal in that app
+running `tmux new-session -t railyard -s railyard-<backend>`, so the yard stays
+in tmux and the other apps are viewports onto it. Covered by
+`tests/ry-view.bats`; described in [`guide.md`](guide.md#watching-a-tmux-yard-from-another-app).*
 
-It does not have to. Run the yardmaster and every engine in tmux, and let herdr
-or Orca open a single terminal that attaches to it:
+Viewer sessions join the yard's session group, so two viewers do not fight over
+window size or which window is current, and they clean themselves up on detach.
+A second viewer on the same backend takes `railyard-herdr-2` rather than
+stealing the first one's client. `--dry-run` prints the attach command.
 
-```sh
-bin/ry-view.sh herdr    # opens one herdr tab running:
-                        # tmux -L <socket> new-session -t railyard -s railyard-herdr
-```
+The cost is the one the plan predicted: the viewing app sees `tmux` in that
+terminal rather than `claude`, so its native agent detection stays dark. That
+does not matter — railyard's status comes from the Stop hook and the inbox.
 
-Why this is the easy version and not the hard one:
-
-- The watcher wakes the yardmaster with `tmux send-keys` at a pane id. That
-  works whether anyone is attached or not, so the nudge path does not care who
-  is looking.
-- Switching viewer changes no railyard state at all. Close the herdr tab, open
-  the Orca one. No claim rewrite, no handover, nothing to migrate. The
-  yardmaster does not notice.
-- `new-session -t` rather than `attach` puts each viewer in its own session in
-  a group, so two viewers do not fight over window size or which window is
-  current.
-
-What it costs: herdr sees `tmux` in that pane, not `claude`, so its native
-agent detection stays dark and `agent prompt` is the wrong call — a viewer
-terminal is not an engine and railyard never sends to it. Orca likewise loses
-its worktree-terminal features. Neither matters, because railyard's own status
-comes from the Stop hook and the inbox.
-
-Effort: S/M, roughly 2–3h with tests. Nothing in the backend seam changes; the
-native backends stay for anyone who wants real tabs per engine. The fake CLIs
-under `tests/fakebin/` already answer enough to test the open call.
-
-Settle first: whether Orca's mobile view mirrors an arbitrary command terminal,
-or only ones it started itself. If it is the latter, this item is tmux + herdr
-only, and Orca stays a native backend.
+Still unsettled, and left to try rather than to design: whether Orca's mobile
+view mirrors an arbitrary command terminal or only ones it started itself. The
+`orca` viewer is implemented the same way as the other two; if the mobile view
+turns out not to mirror it, that is a limitation of the viewer, not of the
+command.
 
 ## 2. The split yard — engines are welded to the backend that dispatched them
 

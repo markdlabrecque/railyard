@@ -145,6 +145,43 @@ Two things worth knowing:
   Nothing else in railyard has to care, but that is why the field looks
   different from the other backends'.
 
+## Watching a tmux yard from another app
+
+The backends above each host a whole yard. There is a second way to use them:
+run the yard in tmux and let one of the others just *look* at it.
+
+```sh
+bin/ry-view.sh herdr      # one herdr tab attached to the tmux yard
+bin/ry-view.sh orca
+bin/ry-view.sh cmux
+```
+
+Each opens a single terminal running
+
+```
+tmux new-session -t railyard -s railyard-herdr
+```
+
+so the viewer joins the yard's session group — its own session, its own window
+size, the same windows. `--dry-run` prints that command without opening
+anything.
+
+Why this is worth having: the yardmaster and every engine stay in tmux, so the
+watcher's nudge works whether anyone is attached or not, and switching viewer
+changes no railyard state at all. Close the herdr tab, open the Orca one; no
+claim rewrite, no handover, nothing to migrate. The yardmaster does not notice.
+It also means the yard cannot get split across two apps: engines are only ever
+launched by the tmux yard.
+
+What it costs: the viewing app sees `tmux` in that terminal, not `claude`, so
+its native agent detection stays dark and its worktree-terminal features do not
+apply. That is fine — a viewer is not an engine. Railyard records no state for
+it, never sends to it, and the yardmaster's status comes from the Stop hook and
+the inbox either way.
+
+Viewer sessions clean themselves up on detach, and a second viewer on the same
+backend gets `railyard-herdr-2` rather than stealing the first one's client.
+
 ## Register a project
 
 ```sh
@@ -261,6 +298,7 @@ instructions into the engine's window; it keeps its context and carries on.
 | command | does |
 | --- | --- |
 | `bin/ry-yard.sh` | open or attach to the yard |
+| `bin/ry-view.sh [--dry-run] <herdr\|orca\|cmux>` | open a viewer onto a tmux-hosted yard |
 | `bin/ry-dispatch.sh --haul\|--survey [--mode <m>] [--base <b>] [--after <id>] <project> "<waybill>"` | dispatch or queue a task |
 | `bin/ry-manifest.sh` | every task not yet decoupled |
 | `bin/ry-inbox.sh [--ack]` | unread engine events |
