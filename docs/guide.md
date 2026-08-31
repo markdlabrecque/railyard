@@ -250,6 +250,104 @@ optional:
   `develop` when the project has one, otherwise the remote's default branch.
   Railyard never touches your release branch.
 
+## Fixtures
+
+`fixtures/` at the railyard root holds the machine-local files a project's
+siding needs to start from — a database dump being the obvious case. One
+directory per project:
+
+```
+fixtures/
+  myapp/
+    db.sql.gz
+```
+
+It is gitignored, like `projects/`, `yard/`, `state/` and `data/<id>/`, because
+these files are large, machine-local, and often contain client data. Nothing in
+railyard reads them; they exist for the project's own start script.
+
+Railyard creates `fixtures/<project>/` when it couples a siding, so a start
+script can rely on the directory existing and simply find it empty. Drop the
+files in yourself; nothing else does.
+
+## The worktree start script
+
+A fresh siding is a bare git worktree. For a project that needs a database or a
+warmed-up environment before anything can be verified, that is not enough — and
+an engine should never have to improvise it, nor a waybill carry environment
+instructions that have nothing to do with the task.
+
+So a project may set up its own sidings. Put an executable script here, inside
+the project repo, where it is versioned alongside the code it sets up:
+
+```
+.railyard/worktree-start.sh
+```
+
+That is the whole declaration: railyard looks at that one path, and does
+nothing at all when it is absent. No config line, no registration.
+
+### The contract
+
+| | |
+|---|---|
+| **Path** | `.railyard/worktree-start.sh` in the project repo. Found by path or not at all. |
+| **When** | At couple time: after the siding is cut and after its `.ddev/config.local.yaml` name override is written, before the engine launches. So `ddev` is safe to call. |
+| **Shape** | Runs for every task, hauls and surveys alike. Run directly when executable, otherwise under `bash`. |
+| **Working directory** | The siding. |
+| **Output** | stdout and stderr, captured to `state/<id>.start.log`. That log is the record of what setup did; nothing streams anywhere else. |
+| **Timeout** | 600 seconds, then the script and its children are killed. |
+| **Failure** | Never blocks the dispatch. |
+| **Trust** | None needed. It is the project's own script. |
+
+### Environment
+
+| Variable | |
+|---|---|
+| `RY_FIXTURE_PATH` | **`fixtures/<project>/` — the project's own directory, not the `fixtures/` root.** A start script never has to know its project's directory name; read this and look inside. Railyard creates it if it is missing, so it always exists and may be empty. |
+| `RY_SIDING` | The siding's path. Same as `$PWD`. |
+| `RY_PROJECT` | The project name, as it appears under `projects/`. |
+| `RY_ID` | The task id. Useful for a per-siding resource name. |
+| `RY_HOME` | The railyard root. |
+| `RY_BIN` | Railyard's `bin/`. |
+| `RY_BACKEND` | Where the engine's terminal will live. |
+
+A DDEV project's name is already set for you, in the siding's gitignored
+`.ddev/config.local.yaml`, so `ddev start` in the script gets this siding's own
+project rather than colliding with another one. Read the name from there if the
+script needs it; do not invent one.
+
+Everything else is the script's own business. Railyard does not care what it
+does, only whether it exited.
+
+### When it fails
+
+A failing start script does not abort the dispatch. Three things happen and
+then the engine launches anyway:
+
+1. The exit status and the log path become an inbox line, so the yardmaster
+   sees it without polling:
+   `[railyard] engine <id> start-script-failed: exit 3; output in state/<id>.start.log`
+2. The engine is told, in its own prompt, that setup failed and why — and told
+   plainly that repairing the script is not its job. It carries on if the task
+   does not need the environment (a read-only survey usually does not) and
+   reports `BLOCKED` if it does. It never fabricates a result it could not
+   verify.
+3. `ry-couple.sh` says so on stderr, so a dispatch never quietly opens onto a
+   broken environment.
+
+A script that hangs is worse than one that fails: it would hold the dispatch
+open with no engine and no inbox line. So it is killed after **600 seconds**,
+along with anything it started, and reported as a timeout rather than an exit
+status — the two mean different things to whoever debugs it:
+
+```
+[railyard] engine <id> start-script-failed: timeout 600s; output in state/<id>.start.log
+```
+
+`RY_START_TIMEOUT` overrides the bound, in seconds. It exists so the test suite
+does not sit for ten minutes; there is no reason to set it by hand.
+
 ## The daily loop
 
 **Ask for work.** Plain language is enough. `/dispatch myapp fix the flaky

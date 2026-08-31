@@ -199,3 +199,102 @@ ry_ddev_delete() {  # <siding> [<prefix>] [<project>]: never fatal, never blocki
     || printf 'note: ddev delete --omit-snapshot --yes %s failed; that DDEV project may still exist\n' "$name" >&2
   return 0
 }
+
+# --- events -----------------------------------------------------------------
+
+ry_event() {  # <id> <text>: one line on state/events.log
+  # The watcher turns each new line into an inbox line for the yardmaster.
+  # There is exactly one such channel; anything the yardmaster must see without
+  # polling goes through here.
+  local home; home=$(ry_home)
+  printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >> "$home/state/events.log"
+}
+
+# --- worktree start script --------------------------------------------------
+# A project can set up a freshly cut siding for itself: a database, a warmed
+# environment, whatever the engine would otherwise have to improvise. The
+# script is found at a fixed path inside the project repo or not at all --
+# nothing declares it. It runs at couple time, after the DDEV name override so
+# it can reach `ddev`, and before the engine launches.
+#
+# Its contract lives in docs/guide.md ("The worktree start script"). Keep the
+# two in step: whoever writes the first one reads that page and nothing else.
+
+RY_START_SCRIPT=".railyard/worktree-start.sh"
+RY_START_TIMEOUT_DEFAULT=600
+
+ry_fixture_dir() {  # <project> -> fixtures/<project>, created if missing
+  local home d; home=$(ry_home); d="$home/fixtures/$1"
+  mkdir -p "$d" || ry_die "could not create $d"
+  printf '%s\n' "$d"
+}
+
+ry_start_outcome=""   # set by ry_run_start_script: "" | "exit N" | "timeout Ns"
+
+ry_run_start_script() {  # <id> <siding> <project>: 1 when the script failed
+  # Returns 0 when there is no script at all (the common case, and nothing is
+  # written), and 0 when the script succeeded. On failure or timeout it returns
+  # 1 with ry_start_outcome set; the caller reports and launches anyway.
+  ry_start_outcome=""
+  local id=$1 siding=$2 project=$3
+  local script="$siding/$RY_START_SCRIPT"
+  [ -f "$script" ] || return 0
+
+  local home bindir log secs pid waited rc monitor
+  home=$(ry_home); log="$home/state/$id.start.log"
+  bindir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  secs=${RY_START_TIMEOUT:-$RY_START_TIMEOUT_DEFAULT}
+
+  # Job control gives the script its own process group, so a timeout can kill
+  # the whole tree. Without it a hung child of the script would outlive the
+  # kill and keep the log open. `timeout(1)` is GNU coreutils and is not on a
+  # stock macOS, so the bound is a bash watchdog instead.
+  case $- in *m*) monitor=1 ;; *) monitor=0 ;; esac
+  set -m
+  (
+    cd "$siding" || exit 127
+    export RY_HOME="$home" RY_ID="$id" RY_BIN="$bindir" \
+           RY_BACKEND="$(ry_backend 2>/dev/null || echo none)" \
+           RY_SIDING="$siding" RY_PROJECT="$project" \
+           RY_FIXTURE_PATH="$(ry_fixture_dir "$project")"
+    if [ -x "$script" ]; then exec "$script"; else exec bash "$script"; fi
+  ) >"$log" 2>&1 &
+  pid=$!
+  [ "$monitor" -eq 1 ] || set +m
+
+  waited=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$waited" -ge "$secs" ]; then
+      kill -TERM "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+      sleep 1
+      kill -KILL "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      ry_start_outcome="timeout ${secs}s"
+      printf '\n[railyard] killed after %ss: the start script did not exit.\n' "$secs" >> "$log"
+      return 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  rc=0; wait "$pid" 2>/dev/null || rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  ry_start_outcome="exit $rc"
+  return 1
+}
+
+ry_start_failure_notice() {  # <id> <outcome> -> the text the engine is given
+  local id=$1 outcome=$2 home; home=$(ry_home)
+  cat <<TXT
+Setup notice: this project's own environment setup script
+($RY_START_SCRIPT) failed before you started -- $outcome. Its output is in
+$home/state/$id.start.log.
+
+Repairing that script, or working around it, is not your job: it is the
+yardmaster's, and the failure has already been reported. Do not edit it and do
+not reinvent what it does.
+
+Carry on if the task does not need the environment -- a read-only survey
+usually does not. If it does need it, stop and report BLOCKED saying so. Never
+fabricate a result you could not actually verify.
+TXT
+}
