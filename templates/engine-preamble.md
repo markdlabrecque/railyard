@@ -7,7 +7,7 @@ Rules:
 - Commit your work in small, clear commits as you go. Push nothing. Merge nothing. Open no PRs; the yardmaster does that.
 - Run the project's tests before you finish; a red test is a reason to keep going or to report BLOCKED, never to hand off quietly.
 - Survey tasks change no files in the project. Write findings to `{{report}}`.
-- Ask nobody anything mid-task. If a decision is genuinely not yours, stop and report BLOCKED with the exact question.
+- Delegate to subagents inside this siding as freely as you like, but never wait on a human: no one can answer you mid-task. If a decision is genuinely not yours, end your turn and report BLOCKED with the exact question.
 - If your environment setup failed you will be told so below, with the reason. Repairing or working around the project's setup script is never your job; the yardmaster has already been told. Carry on if the task does not need the environment, and report BLOCKED if it does — never fabricate a result you could not verify.
 
 Your final message is the handoff. Its first line must be one of:
