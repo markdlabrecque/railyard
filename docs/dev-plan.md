@@ -1,7 +1,8 @@
 # What is left to build
 
-*For the dispatcher. Six items, none of them blocking anything. Written after
-the v0.2.0 release, ordered by how much each one changes a working day rather
+*For the dispatcher. Six items, none of them blocking anything; the first
+three are now built and are kept here as the record of what shipped and why.
+Written after the v0.2.0 release, ordered by how much each one changes a working day rather
 than by how hard it is. Backend design: [`design.md`](design.md#backends);
 what the backends work already shipped: [`backends-plan.md`](backends-plan.md).*
 
@@ -51,14 +52,13 @@ So the yard can no longer split by accident, and the way not to want to is item
 1. Moving a running engine between backends stays unbuilt, and there is no
 longer a reason to build it.
 
-## 3. `ry-claim.sh --held`
+## 3. `ry-claim.sh --held` — shipped
 
-An exit code rather than a sentence: 0 when a live terminal holds the yard, 1
-otherwise, no output. For shell prompts and scripts that want to know before
-they act. `--json` alongside it if anything ever needs the backend and target
-as fields.
-
-Effort: S, under an hour. `bin/ry-claim.sh` and `tests/ry-claim.bats`.
+*Built. `bin/ry-claim.sh --held` says nothing and exits 0 when a live terminal
+holds the yard, 1 otherwise — including when the claim names a terminal that
+has since closed, which is not a held yard. `--json` answers the same question
+as `held`, `backend`, `target` and `alive` fields. Covered by
+`tests/ry-claim.bats`.*
 
 ## 4. A default backend per yard
 
