@@ -42,7 +42,7 @@ case $shape in
           mode=none ;;
 esac
 
-ry_backend_check
+ry_backend_check; ry_backend_no_split
 home=$(ry_home)
 pdir=$(ry_project_dir "$project")
 git -C "$pdir" fetch -q origin

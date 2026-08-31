@@ -104,6 +104,22 @@ So a yard picks a backend and stays on it. Start a session on a different
 backend while another holds the yard and it is told so at session start and
 stands down, rather than quietly claiming alongside it and sharing the inbox.
 
+Engines are held to the same rule, and this one is enforced rather than
+reported. An engine records the backend that launched it and can only ever be
+peeked at, sent to or decoupled through that app, so a yard with engines in two
+apps has engines that go dark the moment one of them is quit. Dispatching or
+coupling onto a second backend is refused:
+
+```
+error: this yard already has engines on herdr (xyz-0830-1412-3f9a), and tmux
+would split it. ...
+```
+
+Decouple those tasks first, or open the yard on the backend they are already
+on — or take the third option and host every engine in tmux, looking at it from
+the other app with `bin/ry-view.sh`. `RY_ALLOW_SPLIT=1` overrides the refusal
+for the case where the other app is gone and you want to carry on regardless.
+
 ## Running in cmux
 
 ```sh

@@ -27,29 +27,29 @@ view mirrors an arbitrary command terminal or only ones it started itself. The
 turns out not to mirror it, that is a limitation of the viewer, not of the
 command.
 
-## 2. The split yard — engines are welded to the backend that dispatched them
+## 2. The split yard — settled
 
-`bin/ry-engine-launch.sh` writes `backend=` and `target=` into
-`state/<id>.meta` at launch, and peek, send and decouple read them for the life
-of the task. That is what lets a yardmaster take over on a different backend
-without breaking the engines already running.
+*Checked after item 1 shipped, as this item asked. The lossy option — stopping
+a live engine and relaunching it with `claude --resume` on another backend —
+was not built, and should not be.*
 
-It is also the trap. Engines dispatched under herdr stay reachable only through
-herdr. Quit herdr and they are unreachable, even though their sidings, their
-branches and their state are all fine. Dispatch after that and the new engines
-open somewhere else, so one yard ends up split across two apps.
+Item 1 removes the trap for anyone who takes it: host the yard in tmux, look at
+it from herdr or Orca, and no engine is ever welded to an app you might quit.
+What item 1 does not do is *stop* you hosting a yard in herdr and then
+dispatching on tmux, so the trap was still reachable by accident.
 
-Two ways out:
+That is now refused. `bin/ry-engine-launch.sh` records `backend=` and `target=`
+per engine as before; `ry_backend_no_split` in `bin/ry-backend-lib.sh` reads
+those back and refuses to open an engine beside engines in another app.
+`bin/ry-dispatch.sh` and `bin/ry-couple.sh` both check before they write
+anything, so a refused dispatch leaves no half-made task and a refused couple
+leaves the siding uncut. `RY_ALLOW_SPLIT=1` overrides it for the case the guard
+cannot judge — the other app is already gone and you want to carry on. Covered
+by `tests/ry-split-yard.bats`.
 
-- **Move a running engine.** A live Claude is welded to a PTY the old backend
-  owns; the new one cannot adopt it. It means stopping the engine and
-  relaunching with `claude --resume`, which needs the session id captured at
-  launch and risks the engine's context and its Stop hook. M/L, and lossy.
-- **Make item 1 the answer.** If every engine runs in tmux and the other
-  backends are only viewports, this never happens.
-
-Recommendation: build item 1, then check whether this still bites. Do not scope
-it before then.
+So the yard can no longer split by accident, and the way not to want to is item
+1. Moving a running engine between backends stays unbuilt, and there is no
+longer a reason to build it.
 
 ## 3. `ry-claim.sh --held`
 

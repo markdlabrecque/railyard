@@ -37,7 +37,7 @@ cmd+="$engine_cmd --settings $(printf %q "$settings") $(printf %q "$prompt")"
 
 ry_claude_trust "$siding"
 
-ry_backend_check
+ry_backend_check; ry_backend_no_split
 target=$(ry_backend_open "$id" "$siding" "$cmd")
 printf 'backend=%s\ntarget=%s\n' "$(ry_backend)" "$target" >> "$home/state/$id.meta"
 ry_set_status "$id" running
