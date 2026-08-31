@@ -56,5 +56,15 @@ for f in "$st"/*.status; do
   case $(cat "$f") in running) running=$((running+1));; turn-ended) ended=$((ended+1));; esac
 done
 unread=0; [ -s "$st/inbox.md" ] && unread=$(grep -c . "$st/inbox.md")
-printf 'railyard: %s %d engine(s) running, %d turn-ended, %d unread inbox line(s). Read with bin/ry-inbox.sh.\n' \
+# data/learnings.md is a queue, not an archive: /shed files into it, and the
+# next session start, /manifest or /allaboard empties it by promoting each line
+# somewhere that enforces it or dropping it. Unprocessed lines are worth a word
+# in the summary for the same reason unread inbox lines are.
+learnings=0
+[ -f "$home/data/learnings.md" ] && learnings=$(grep -c '^- ' "$home/data/learnings.md" || true)
+printf 'railyard: %s %d engine(s) running, %d turn-ended, %d unread inbox line(s). Read with bin/ry-inbox.sh.' \
   "$standing" "$running" "$ended" "$unread"
+if [ "$learnings" -gt 0 ]; then
+  printf ' %d unfiled learning(s) in data/learnings.md: promote or drop each one (AGENTS.md § Learnings).' "$learnings"
+fi
+printf '\n'

@@ -324,6 +324,13 @@ Two more session commands:
 - `/allaboard` — recap of the session and any open decisions.
 - `/shed` — end-of-session sweep; durable lessons land in `data/learnings.md`.
 
+`data/learnings.md` is a queue, not an archive. `/shed` files into it; session
+start, `/manifest` and `/allaboard` empty it. Each line is promoted somewhere
+that enforces it — the engine preamble, `AGENTS.md`, a project's line in
+`data/projects.md`, a check in a script — or dropped. Promotions need your word,
+so you see the whole queue before anything goes. Nothing accumulates, and
+nothing is carried forward undecided.
+
 ## When something goes wrong
 
 **`engine <id> silent for Nm`** — a running engine ended no turn. Look at it:

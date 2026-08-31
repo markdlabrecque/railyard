@@ -90,3 +90,22 @@ teardown() {
   [ ! -e "$RY_HOME/state/yardmaster.orca" ]
   [ "$(claim_target)" = "%7" ]
 }
+
+# data/learnings.md is a queue, not an archive: /shed files into it, and the
+# next session start, /manifest or /allaboard empties it by promoting or
+# dropping each line. So the summary has to say when it is not empty.
+@test "session start reports unprocessed learnings" {
+  mkdir -p "$RY_HOME/data"
+  printf '# Learnings\n\n- 2026-08-30 — one\n- 2026-08-30 — two\n' > "$RY_HOME/data/learnings.md"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"2 unfiled learning(s)"* ]]
+}
+
+@test "an empty or header-only learnings file is not reported" {
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [[ "$output" != *"unfiled learning"* ]]
+  mkdir -p "$RY_HOME/data"; printf '# Learnings\n' > "$RY_HOME/data/learnings.md"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [[ "$output" != *"unfiled learning"* ]]
+}
