@@ -1,0 +1,12 @@
+# CodeRabbit skips auto-review on any PR whose base is not the default branch.
+# Every railyard PR targets `develop`, so name it here explicitly.
+language: en-US
+reviews:
+  auto_review:
+    enabled: true
+    base_branches:
+      - develop
+      - main
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
