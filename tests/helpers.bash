@@ -102,3 +102,9 @@ claim_backend() { sed -n 's/^backend=//p' "$RY_HOME/state/yardmaster.claim" 2>/d
 hold_yard() {  # <backend> <target>
   printf 'backend=%s\ntarget=%s\n' "$1" "$2" > "$RY_HOME/state/yardmaster.claim"
 }
+
+# Record the yard's default backend in data/yard.md.
+register_yard_backend() {  # <backend>
+  mkdir -p "$RY_HOME/data"
+  printf '# This yard\n\n- `backend: %s`\n' "$1" > "$RY_HOME/data/yard.md"
+}
