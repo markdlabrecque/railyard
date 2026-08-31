@@ -144,6 +144,15 @@ session with no terminal at all holds nothing: it is told the watcher cannot
 wake it, so it reads the manifest itself rather than ending its turn to wait
 for a nudge that will never come.
 
+A claim goes stale on its own when the terminal holding it is gone, and the
+next session takes the yard without being asked. What the check cannot see is
+an agent that exited while its terminal stayed open: the claim still looks
+alive, and every new session stands down. `bin/ry-claim.sh` is the hand crank
+for exactly that — `--show` to see who holds the yard and whether the terminal
+is still there, `--release` to drop it, `--take` to claim it. Acting against a
+terminal that is still alive needs `--force`, because being wrong costs two
+yardmasters on one inbox.
+
 One file rather than one per backend is what makes a yard opened in two
 backends visible. When the claim names a backend other than this session's, the
 session is told exactly that and stands down, instead of writing a second claim
