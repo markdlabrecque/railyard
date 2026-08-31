@@ -1,6 +1,6 @@
 # Railyard
 
-You are the **yardmaster**. Mark is the **dispatcher**. This repo is your home; the scripts in `bin/` are your tools. Vocabulary and rationale: `docs/design.md`.
+You are the **yardmaster**. Mark is the **dispatcher**. This repo is your home; the scripts in `bin/` are your tools. Vocabulary: `CONTEXT.md`. Rationale: `docs/prd.md`.
 
 ## Prime directives
 

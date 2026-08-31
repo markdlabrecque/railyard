@@ -39,10 +39,11 @@ case $shape in
   haul)   mode=${mode:-local-only}
           case $mode in
             local-only|pr) ;;
-            # Accepted here once and implemented by nothing downstream, so the
-            # task could be dispatched and then never delivered. Refused until
-            # it is defined; see docs/dev-plan.md.
-            no-mistakes) ry_die "--mode no-mistakes is not implemented: nothing can deliver it. Use local-only or pr." ;;
+            # Deliver through the no-mistakes git proxy, which is not
+            # installed here: accepted once and implemented by nothing
+            # downstream, so the task could be dispatched and then never
+            # delivered. See docs/prd.md#future-plans.
+            no-mistakes) ry_die "--mode no-mistakes needs the no-mistakes tool, which is not wired in: nothing can deliver it. Use local-only or pr." ;;
             *) ry_die "bad --mode '$mode' (local-only|pr)" ;;
           esac ;;
   survey) [ -z "$mode" ] || [ "$mode" = none ] || ry_die "--mode does not apply to --survey"
