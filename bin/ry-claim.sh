@@ -9,11 +9,16 @@
 # claim whose terminal is still live needs --force, because the cost of being
 # wrong is two yardmasters drawing from one inbox.
 #
-# usage: ry-claim.sh [--show] | --release [--force] | --take [--force]
+# usage: ry-claim.sh [--show|--held|--json] | --release [--force] | --take [--force]
 #   --show     who holds the yard, and whether that terminal is still there (default)
+#   --held     say nothing; exit 0 when a live terminal holds the yard, 1 otherwise
+#   --json     the same answer as fields, for anything that has to parse it
 #   --release  drop the claim, so the next session to start takes the yard
 #   --take     claim the yard for this session's terminal
 #   --force    act even though the holding terminal is still alive
+#
+# --held is the one to test in a shell prompt or a script: a claim on a
+# terminal that has since closed is not a held yard, so it exits 1 too.
 set -euo pipefail
 # shellcheck source=bin/ry-lib.sh
 . "$(dirname "$0")/ry-lib.sh"
@@ -24,9 +29,9 @@ action=show; force=false
 while [ $# -gt 0 ]; do
   case $1 in
     -h|--help) ry_usage "$0"; exit 0 ;;
-    --show|--release|--take) action=${1#--} ;;
+    --show|--held|--json|--release|--take) action=${1#--} ;;
     --force) force=true ;;
-    *) ry_die "unknown option '$1' (--show|--release|--take|--force)" ;;
+    *) ry_die "unknown option '$1' (--show|--held|--json|--release|--take|--force)" ;;
   esac
   shift
 done
@@ -47,6 +52,18 @@ case $action in
         echo "that terminal is this one"
       fi
     fi ;;
+
+  held)
+    $alive ;;
+
+  json)
+    jq -n --arg backend "$held_backend" --arg target "$held" \
+          --argjson held "$([ -n "$held" ] && echo true || echo false)" \
+          --argjson alive "$($alive && echo true || echo false)" \
+      '{held: $held,
+        backend: (if $held then $backend else null end),
+        target: (if $held then $target else null end),
+        alive: $alive}' ;;
 
   release)
     [ -n "$held" ] || { echo "the yard is already unclaimed"; exit 0; }

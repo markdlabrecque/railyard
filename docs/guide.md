@@ -91,9 +91,16 @@ check gets it wrong:
 
 ```sh
 bin/ry-claim.sh                    # who holds the yard, and is that terminal still there
+bin/ry-claim.sh --held             # no output; exit 0 if a live terminal holds it
+bin/ry-claim.sh --json             # the same answer as fields
 bin/ry-claim.sh --release          # drop it, so the next session to start takes over
 bin/ry-claim.sh --take             # claim it for this session
 ```
+
+`--held` is the one for a shell prompt or a script — it answers with an exit
+code and says nothing, and a claim on a terminal that has since closed counts
+as not held. `--json` gives `held`, `backend`, `target` and `alive` for anything
+that has to parse the answer.
 
 A claim whose terminal has closed is dropped or taken freely — that is the
 normal case, and session start already handles it for you. The one to reach for
@@ -327,6 +334,7 @@ instructions into the engine's window; it keeps its context and carries on.
 | `bin/ry-pr.sh <id>` | open the PR/MR |
 | `bin/ry-pr-poll.sh <id>` | check an open PR once, by hand |
 | `bin/ry-decouple.sh [--force] [--delete-branch] <id>` | remove the siding, archive the state |
+| `bin/ry-claim.sh [--held\|--json\|--release\|--take] [--force]` | look at, test, drop or take the yard claim |
 
 Every script takes `-h`.
 
