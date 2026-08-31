@@ -7,9 +7,13 @@
 #
 # usage: ry-dispatch.sh (--haul|--survey) [--mode local-only|pr]
 #                       [--base <branch>] [--after <id>[,<id>...]]
-#                       <project> <waybill>
+#                       [--prefix <token>] <project> <waybill>
 # The base branch comes from --base, else the project's data/projects.md line,
 # else develop when the project has one, else the remote's default branch.
+# --prefix is one word (a ticket number, say) naming this siding's DDEV
+# project: the siding gets name <prefix>-<project> so it never clashes with
+# another siding or your own checkout. Defaults to the task id's suffix, and
+# means nothing for a project without .ddev/.
 # prints: id=<id>, base=<branch> and siding=<path>
 set -euo pipefail
 # shellcheck source=bin/ry-lib.sh
@@ -17,7 +21,7 @@ set -euo pipefail
 # shellcheck source=bin/ry-backend-lib.sh
 . "$(dirname "$0")/ry-backend-lib.sh"
 
-shape="" mode="" base="" after="" project="" waybill=""
+shape="" mode="" base="" after="" prefix="" prefix_set=0 project="" waybill=""
 while [ $# -gt 0 ]; do
   case $1 in
     --haul)   shape=haul ;;
@@ -25,6 +29,7 @@ while [ $# -gt 0 ]; do
     --mode)   mode=${2:-}; shift ;;
     --base)   base=${2:-}; shift ;;
     --after)  after=${2:-}; shift ;;
+    --prefix) prefix=${2:-}; prefix_set=1; shift ;;
     -h|--help) ry_usage "$0"; exit 0 ;;
     --*)      ry_die "unknown flag $1" ;;
     *) if [ -z "$project" ]; then project=$1; else waybill=$1; fi ;;
@@ -35,6 +40,10 @@ done
 [ -n "$shape" ]   || ry_die "need --haul or --survey"
 [ -n "$project" ] || ry_die "need <project>"
 [ -n "$waybill" ] || ry_die "need <waybill>"
+# Validate before anything is written: a bad prefix would only surface as a
+# DDEV project that refuses to start, long after dispatch.
+[ "$prefix_set" -eq 0 ] || ry_prefix_valid "$prefix" \
+  || ry_die "bad --prefix '$prefix': one token matching ^[A-Za-z0-9][A-Za-z0-9-]*$ (a ticket number or one short word)"
 case $shape in
   haul)   mode=${mode:-local-only}
           case $mode in
@@ -70,6 +79,8 @@ for dep in ${after//,/ }; do
 done
 
 id=$(ry_new_id "$project")
+# No prefix given: the id already ends in a random token unique to this task.
+[ -n "$prefix" ] || prefix=${id##*-}
 siding="$home/yard/$project/$id"
 branch="ry/$id"
 
@@ -82,6 +93,7 @@ mode=$mode
 base=$base
 branch=$branch
 siding=$siding
+prefix=$prefix
 created=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 META
 [ -n "$after" ] && printf 'after=%s\n' "$after" >> "$home/state/$id.meta"

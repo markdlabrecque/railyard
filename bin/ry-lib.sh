@@ -110,3 +110,52 @@ ry_claude_trust() {  # <dir>: pre-accept Claude Code's folder-trust dialog for d
     rm -f "$tmp"; ry_die "could not update $f"
   fi
 }
+
+# --- DDEV -------------------------------------------------------------------
+# Two sidings of the same project cannot both run `ddev` under one project
+# name, and neither can a siding and Mark's own checkout. The fix is one line
+# of per-siding config: a unique `name:` in .ddev/config.local.yaml, written at
+# couple time so no engine ever has to discover it. The file is gitignored in
+# every project, so it never shows up in the siding's diff.
+
+RY_DDEV_OVERRIDE=".ddev/config.local.yaml"
+
+ry_prefix_valid() {  # <token>: one hostname-label-safe word
+  [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]]
+}
+
+ry_ddev_name() {  # <prefix> <project> -> a valid hostname label, 63 chars max
+  local n="$1-$2"
+  n=${n:0:63}
+  while [ "${n%-}" != "$n" ]; do n=${n%-}; done   # truncation must not end in -
+  printf '%s\n' "$n"
+}
+
+ry_ddev_write_override() {  # <siding> <project> <prefix>: no-op without .ddev/
+  local siding=$1 project=$2 prefix=$3 name
+  [ -d "$siding/.ddev" ] || return 0
+  git -C "$siding" check-ignore -q -- "$RY_DDEV_OVERRIDE" || ry_die \
+    "project '$project' does not gitignore $RY_DDEV_OVERRIDE. Railyard writes that file into every siding of a DDEV project to give it its own DDEV project name; if the project tracks it, the siding is dirty from the moment it is cut and ry-pr.sh will later refuse to open the PR. Add $RY_DDEV_OVERRIDE to the project's .gitignore, then couple again."
+  name=$(ry_ddev_name "$prefix" "$project")
+  cat > "$siding/$RY_DDEV_OVERRIDE" <<YAML
+# Written by railyard when this siding was coupled. Gitignored, never committed.
+# Its own DDEV project name, so this siding does not clash with another siding
+# of $project or with your own checkout.
+name: $name
+YAML
+  printf '%s\n' "$name"
+}
+
+ry_ddev_delete() {  # <siding>: remove the siding's DDEV project; never fatal
+  local siding=$1 name
+  [ -d "$siding/.ddev" ] || return 0
+  name=$(sed -n 's/^name: *//p' "$siding/$RY_DDEV_OVERRIDE" 2>/dev/null | head -n 1)
+  [ -n "$name" ] || return 0
+  if ! command -v ddev >/dev/null 2>&1; then
+    printf 'note: ddev is not on PATH; DDEV project %s left in place\n' "$name" >&2
+    return 0
+  fi
+  ( cd "$siding" && ddev delete -O "$name" ) >/dev/null 2>&1 \
+    || printf 'note: ddev delete -O %s failed; that DDEV project may still exist\n' "$name" >&2
+  return 0
+}

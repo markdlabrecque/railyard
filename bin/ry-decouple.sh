@@ -34,6 +34,8 @@ if [ -d "$siding" ]; then
   if [ "$force" -eq 0 ] && [ -n "$(git -C "$siding" status --porcelain)" ]; then
     ry_die "siding $siding has uncommitted changes; commit them or pass --force"
   fi
+  # The siding's own DDEV project goes with the siding, not after it.
+  ry_ddev_delete "$siding"
   git -C "$pdir" worktree remove --force "$siding"
 fi
 git -C "$pdir" worktree prune

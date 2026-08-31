@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Fake ddev CLI. Logs args; answers the one command railyard uses.
+printf 'ddev %s\n' "$*" >> "$RY_FAKE_DDEV_LOG"
+case "$1" in
+  delete) [ -z "${RY_FAKE_DDEV_FAIL:-}" ] || { echo "fake ddev: delete failed" >&2; exit 1; } ;;
+  *) echo "fake ddev: unhandled $*" >&2; exit 1 ;;
+esac

@@ -109,3 +109,21 @@ register_yard_backend() {  # <backend>
   mkdir -p "$RY_HOME/data"
   printf '# This yard\n\n- `backend: %s`\n' "$1" > "$RY_HOME/data/yard.md"
 }
+
+# ddev: fake CLI plus the log it writes.
+setup_ddev() {
+  export RY_FAKE_DDEV_LOG="$BATS_TEST_TMPDIR/ddev.log"
+  : > "$RY_FAKE_DDEV_LOG"
+  export PATH="$BATS_TEST_DIRNAME/fakebin:$PATH"
+}
+
+# Turn a project into a DDEV project: a .ddev/ directory, and the gitignore
+# line every real project has.
+make_ddev_project() {  # <name> [--tracked]
+  local name=$1 dir
+  dir="$RY_HOME/projects/$name"
+  mkdir -p "$dir/.ddev"
+  printf 'name: %s\n' "$name" > "$dir/.ddev/config.yaml"
+  [ "${2:-}" = --tracked ] || printf '/.ddev/config.local.yaml\n' > "$dir/.gitignore"
+  ( cd "$dir" && git add -A && git commit -qm ddev && git push -q origin HEAD )
+}
