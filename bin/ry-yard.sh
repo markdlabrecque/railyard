@@ -16,6 +16,7 @@ set -euo pipefail
 . "$(dirname "$0")/ry-backend-lib.sh"
 case ${1:-} in -h|--help) ry_usage "$0"; exit 0 ;; esac
 
+ry_require git jq
 home=$(ry_home); ry_backend_check
 cmd="export CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false RY_BACKEND=$(ry_backend) $(ry_env_exports); claude"
 if [ "${1:-}" = --dry-run ]; then printf '%s\n' "$cmd"; exit 0; fi

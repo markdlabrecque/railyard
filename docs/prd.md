@@ -379,7 +379,34 @@ Kept from firstmate, and the reason most of the above is shaped as it is.
 - Evidence is not authorization. A green test run is not a merge approval.
 - No turn ends blind.
 
-## 15. Tests
+## 15. Running on Linux
+
+Railyard is developed on macOS and has to run unchanged on Linux. Two
+utilities differ in ways that do not announce themselves.
+
+**`stat`.** `ry_mtime()` asks GNU first (`stat -c %Y`) and falls back to BSD
+(`stat -f %m`). The order is the whole point. On GNU, `-f` means
+`--file-system`, where `%m` is not a valid directive: it prints a placeholder
+and exits 0. A BSD-first fallback therefore never fires on Linux, and the
+caller does arithmetic on a placeholder — silently breaking stall detection in
+the watcher and killing `ry-manifest.sh` outright. BSD has no `-c` at all and
+exits non-zero, so GNU-first fails over correctly on both. `tests/fakebin-gnu`
+and `tests/fakebin-bsd` hold a `stat` of each flavour so both paths are tested
+wherever the suite runs.
+
+**Missing tools.** `ry_require()` names everything missing at once, with an
+install line for both package managers, rather than letting a script fail
+halfway through on `jq: command not found`. It guards the entry points (
+`ry-yard.sh`, `ry-dispatch.sh`, `ry-couple.sh`, `ry-engine-launch.sh`,
+`ry-merge-local.sh`) and, in `ry-pr.sh`, the forge CLI — checked *before* the
+push, so a missing `gh` cannot leave a pushed branch with no PR behind it, and
+checked per forge, so a GitHub-only machine is never told to install `glab`.
+
+Everything else was audited and is already portable: no `sed -i`, no
+`readlink -f`, no GNU-only `date` flags, no bash 4 features, and every script
+runs under `#!/usr/bin/env bash` rather than `/bin/sh`.
+
+## 16. Tests
 
 bats plus shellcheck, run against fake CLIs on `PATH` (`tests/fakebin/`) so CI
 needs none of the real apps — no Orca, no cmux, no herdr, and a private tmux

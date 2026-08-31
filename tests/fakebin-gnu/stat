@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# GNU stat. -c takes the format; -f means --file-system, where %m is not a
+# valid directive -- GNU prints a placeholder and still exits 0, which is the
+# whole trap: a BSD-first fallback never fires.
+case "${1:-}" in
+  -c) [ "${2:-}" = "%Y" ] && { echo 1700000000; exit 0; } ;;
+  -f) echo '?'; exit 0 ;;
+esac
+echo '?'; exit 0

@@ -14,6 +14,7 @@ set -euo pipefail
 . "$(dirname "$0")/ry-backend-lib.sh"
 case ${1:-} in -h|--help) ry_usage "$0"; exit 0 ;; esac
 
+ry_require git jq
 id=${1:-}; [ -n "$id" ] || ry_die "need <id>"
 home=$(ry_home)
 bindir=$(cd "$(dirname "$0")" && pwd)

@@ -10,7 +10,7 @@ home=$(ry_home); st="$home/state"
 bindir=$(cd "$(dirname "$0")" && pwd)
 
 age_of() {  # <file> -> e.g. 3m / 2h / 1d
-  local s=$(( $(date +%s) - $(stat -f %m "$1" 2>/dev/null || stat -c %Y "$1") ))
+  local s=$(( $(date +%s) - $(ry_mtime "$1") ))
   if [ "$s" -lt 3600 ]; then printf '%dm' $((s/60))
   elif [ "$s" -lt 86400 ]; then printf '%dh' $((s/3600))
   else printf '%dd' $((s/86400)); fi

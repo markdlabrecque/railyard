@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# BSD stat. -f takes the format; -c is not a flag at all and exits non-zero,
+# so a GNU-first fallback does fire.
+case "${1:-}" in
+  -f) [ "${2:-}" = "%m" ] && { echo 1600000000; exit 0; } ;;
+  -c) echo 'stat: illegal option -- c' >&2; exit 1 ;;
+esac
+exit 1
