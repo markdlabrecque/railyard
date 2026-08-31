@@ -417,6 +417,14 @@ shell over somebody else's CLI. What can break is the arguments we pass and the
 JSON we parse, and a fake CLI that logs its argv tests exactly that. The real
 apps are tested by using them.
 
+**The one thing the suite cannot cover** is the forge: opening a real MR,
+parsing its URL, and polling its checks. That was proven by hand against a
+self-hosted GitLab — MR opened, `pr-merged` event raised by the watcher 24
+minutes later — along with surveys, a `local-only` merge, and the queue
+coupling and stranding tasks. A manual test plan existed for that first run and
+was retired once it had been run; repeating it would prove nothing the bats
+suite does not.
+
 ---
 
 # What shipped, in order
