@@ -66,14 +66,29 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   [ -z "$output" ]
 }
 
-@test "an over-long --prefix is refused at dispatch, not truncated" {
+# Truncating would collide; aborting would make the dispatcher re-run for a
+# flag that is only ever a convenience. So: fall back, out loud.
+@test "an over-long --prefix falls back to the id suffix and says so" {
+  make_ddev_project xyz
   long=$(printf 'p%.0s' $(seq 1 80))
   run ry-dispatch.sh --haul --prefix "$long" xyz "x"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"--prefix"* ]]
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"too long"* ]]
   [[ "$output" == *"63"* ]]
-  [ -z "$(ls "$RY_HOME/state")" ]
-  [ -z "$(ls "$RY_HOME/yard")" ]
+  id=$(sed -n 's/^id=//p' <<<"$output")
+  [[ "$output" == *"${id##*-}"* ]]              # it names the value it used
+  # and the meta agrees with the DDEV project that actually exists
+  grep -q "^prefix=${id##*-}\$" "$RY_HOME/state/$id.meta"
+  grep -q "^name: ${id##*-}-xyz\$" "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
+}
+
+@test "the fallback applies to a project with no .ddev/ too, and still dispatches" {
+  long=$(printf 'p%.0s' $(seq 1 80))
+  run ry-dispatch.sh --haul --prefix "$long" xyz "x"
+  [ "$status" -eq 0 ]
+  id=$(sed -n 's/^id=//p' <<<"$output")
+  grep -q "^prefix=${id##*-}\$" "$RY_HOME/state/$id.meta"
+  [ -d "$RY_HOME/yard/xyz/$id" ]
 }
 
 # The longest prefix that still fits must be accepted: the guard is a limit,
@@ -161,14 +176,53 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   [ "$status" -eq 0 ]
 }
 
-@test "a siding with .ddev/ but no override still decouples" {
+# A siding cut before this change has .ddev/ and no override, and its DDEV
+# project is exactly the orphan that had to be cleared by hand for #308.
+@test "a siding with no override is deleted by the name rebuilt from its meta" {
+  make_ddev_project xyz
+  id=$(ry-dispatch.sh --haul --prefix 308 xyz "x" | sed -n 's/^id=//p')
+  rm -f "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
+  run ry-decouple.sh "$id"
+  [ "$status" -eq 0 ]
+  grep -q -- '308-xyz' "$RY_FAKE_DDEV_LOG"
+  [ ! -e "$RY_HOME/yard/xyz/$id" ]
+}
+
+@test "with no override and no prefix in the meta, the project's own config.yaml names it" {
   make_ddev_project xyz
   id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
-  rm -f "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"   # cut before this change
+  rm -f "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
+  sed -i.bak '/^prefix=/d' "$RY_HOME/state/$id.meta"    # meta from before --prefix
+  run ry-decouple.sh "$id"
+  [ "$status" -eq 0 ]
+  grep -q -- ' xyz$' "$RY_FAKE_DDEV_LOG"                # .ddev/config.yaml's name
+  [ ! -e "$RY_HOME/yard/xyz/$id" ]
+}
+
+@test "all three name sources absent: decouple says so and still finishes" {
+  make_ddev_project xyz
+  id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
+  rm -f "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml" \
+        "$RY_HOME/yard/xyz/$id/.ddev/config.yaml"
+  sed -i.bak '/^prefix=/d' "$RY_HOME/state/$id.meta"
+  run ry-decouple.sh --force "$id"     # --force: config.yaml is tracked, so its removal dirties the siding
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no DDEV project name"* ]]
+  [ ! -e "$RY_HOME/yard/xyz/$id" ]
+  [ ! -s "$RY_FAKE_DDEV_LOG" ]
+}
+
+# ry-decouple.sh runs under set -euo pipefail: a sed on a file that is not
+# there used to fail the pipeline and exit before git worktree remove.
+@test "a missing override does not abort the decouple under set -euo pipefail" {
+  make_ddev_project xyz
+  id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
+  rm -f "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
   run ry-decouple.sh "$id"
   [ "$status" -eq 0 ]
   [ ! -e "$RY_HOME/yard/xyz/$id" ]
-  [ ! -s "$RY_FAKE_DDEV_LOG" ]
+  [ -f "$RY_HOME/state/archive/$id/meta" ]              # it reached the archive
+  ! git -C "$RY_HOME/projects/xyz" worktree list | grep -q "yard/xyz/$id"
 }
 
 @test "decouple runs no ddev for a project without .ddev/" {

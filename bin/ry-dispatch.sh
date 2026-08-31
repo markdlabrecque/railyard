@@ -13,8 +13,9 @@
 # --prefix is one word (a ticket number, say) naming this siding's DDEV
 # project: the siding gets name <prefix>-<project> so it never clashes with
 # another siding or your own checkout. It must match [A-Za-z0-9][A-Za-z0-9-]*
-# and be short enough that <prefix>-<project> fits a 63-character hostname
-# label. Defaults to the task id's suffix, and means nothing without .ddev/.
+# and defaults to the task id's random suffix. It falls back to that same
+# suffix, saying so, when <prefix>-<project> will not fit a 63-character
+# hostname label. It means nothing for a project without .ddev/.
 # prints: id=<id>, base=<branch> and siding=<path>
 set -euo pipefail
 # shellcheck source=bin/ry-lib.sh
@@ -43,14 +44,8 @@ done
 [ -n "$waybill" ] || ry_die "need <waybill>"
 # Validate before anything is written: a bad prefix would only surface as a
 # DDEV project that refuses to start, long after dispatch.
-if [ "$prefix_set" -eq 1 ]; then
-  ry_prefix_valid "$prefix" \
-    || ry_die "bad --prefix '$prefix': one token matching ^[A-Za-z0-9][A-Za-z0-9-]*$ (a ticket number or one short word)"
-  # Refused rather than truncated: two prefixes that differ only past the limit
-  # would cut down to the same DDEV project name.
-  ry_ddev_name "$prefix" "$project" >/dev/null \
-    || ry_die "bad --prefix '$prefix': $(ry_ddev_name_too_long "$prefix" "$project")"
-fi
+[ "$prefix_set" -eq 0 ] || ry_prefix_valid "$prefix" \
+  || ry_die "bad --prefix '$prefix': one token matching ^[A-Za-z0-9][A-Za-z0-9-]*$ (a ticket number or one short word)"
 case $shape in
   haul)   mode=${mode:-local-only}
           case $mode in
@@ -88,6 +83,16 @@ done
 id=$(ry_new_id "$project")
 # No prefix given: the id already ends in a random token unique to this task.
 [ -n "$prefix" ] || prefix=${id##*-}
+# Too long for a DDEV project name: fall back to that same random token rather
+# than truncating, which would map two long prefixes onto one name. Dispatch is
+# the only place this is decided, so the prefix= recorded below is always the
+# one the siding's DDEV project is actually called. Said out loud, because a
+# silent substitution leaves you hunting for a project that was never created.
+if ! ry_ddev_name "$prefix" "$project" >/dev/null; then
+  printf 'note: --prefix %s is too long for a DDEV project name (%s) -- using %s instead\n' \
+    "$prefix" "$(ry_ddev_name_too_long "$prefix" "$project")" "${id##*-}"
+  prefix=${id##*-}
+fi
 siding="$home/yard/$project/$id"
 branch="ry/$id"
 
