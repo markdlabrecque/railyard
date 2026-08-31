@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Backend seam. RY_BACKEND=tmux (default) | orca | cmux | herdr | none. Every backend answers
+# Backend seam. tmux (default) | orca | cmux | herdr | none, from RY_BACKEND or
+# data/yard.md. Every backend answers
 # the same five questions: open an engine terminal, stop it, peek at it, send
 # it text, and nudge the yardmaster. The engine's backend and target are
 # recorded in its meta (backend=, target=) so later calls need no env.
@@ -12,16 +13,39 @@
 # shellcheck source=bin/ry-herdr-lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/ry-herdr-lib.sh"
 
-ry_backend() { printf '%s\n' "${RY_BACKEND:-tmux}"; }
+# Which app hosts this yard. RY_BACKEND wins, so the test suite and a one-off
+# override keep working; otherwise the yard says so itself in data/yard.md, the
+# way data/projects.md records a project's mode and base. A yard that records
+# nothing is a tmux yard.
+
+ry_backend_file() { printf '%s\n' "$(ry_home)/data/yard.md"; }
+
+ry_backend_recorded() {  # -> the backend data/yard.md names, empty if it names none
+  local f; f=$(ry_backend_file)
+  [ -f "$f" ] || return 0
+  grep -m1 -oE 'backend: *[A-Za-z][A-Za-z0-9_-]*' "$f" 2>/dev/null | sed 's/backend: *//'
+}
+
+ry_backend() {
+  if [ -n "${RY_BACKEND:-}" ]; then printf '%s\n' "$RY_BACKEND"; return; fi
+  local b; b=$(ry_backend_recorded)
+  printf '%s\n' "${b:-tmux}"
+}
+
+ry_backend_whence() {  # -> where the current answer came from, for error messages
+  if [ -n "${RY_BACKEND:-}" ]; then printf 'RY_BACKEND\n'
+  elif [ -n "$(ry_backend_recorded)" ]; then printf 'data/yard.md\n'
+  else printf 'the default\n'; fi
+}
 
 ry_backend_check() {
   case $(ry_backend) in
     tmux|none) ;;
-    orca) command -v orca >/dev/null || ry_die "RY_BACKEND=orca but the orca CLI is not installed" ;;
-    cmux) ry_cmux_available || ry_die "RY_BACKEND=cmux but the cmux CLI was not found" ;;
-    herdr) ry_herdr_available || ry_die "RY_BACKEND=herdr but the herdr CLI is not installed"
-           ry_herdr_running || ry_die "RY_BACKEND=herdr but no herdr server is running" ;;
-    *) ry_die "unknown RY_BACKEND '$(ry_backend)' (tmux|orca|cmux|herdr|none)" ;;
+    orca) command -v orca >/dev/null || ry_die "$(ry_backend_whence) says orca, but the orca CLI is not installed" ;;
+    cmux) ry_cmux_available || ry_die "$(ry_backend_whence) says cmux, but the cmux CLI was not found" ;;
+    herdr) ry_herdr_available || ry_die "$(ry_backend_whence) says herdr, but the herdr CLI is not installed"
+           ry_herdr_running || ry_die "$(ry_backend_whence) says herdr, but no herdr server is running" ;;
+    *) ry_die "unknown backend '$(ry_backend)' from $(ry_backend_whence) (tmux|orca|cmux|herdr|none)" ;;
   esac
 }
 
