@@ -4,6 +4,7 @@
 # $RY_FAKE_HERDR_TABS as `<tab_id> <pane_id> <label>` lines.
 printf 'herdr %s\n' "$*" >> "$RY_FAKE_HERDR_LOG"
 tabs="${RY_FAKE_HERDR_TABS:-/dev/null}"
+blocked="${RY_FAKE_HERDR_BLOCKED:-/dev/null}"
 
 opt() {  # <name> <args...> -> the value after --name
   local want=$1; shift
@@ -30,6 +31,13 @@ case "${1:-} ${2:-}" in
   "pane get")
     knows_pane "$3" || err "no such pane $3"
     printf '{"id":"1","result":{"type":"pane_info","pane":{"pane_id":"%s"}}}\n' "$3" ;;
+  "agent wait")
+    # panes listed in $RY_FAKE_HERDR_BLOCKED have an agent sitting at a prompt
+    if grep -qxF "$3" "$blocked" 2>/dev/null; then
+      printf '{"id":"1","result":{"type":"agent_wait","state":"blocked"}}\n'
+    else
+      printf '{"id":"1","result":{"type":"agent_wait","state":"running"}}\n'
+    fi ;;
   "agent prompt")
     # herdr only recognises agent panes; the yardmaster's is one, engines' are not
     case $3 in pane-ym*) printf '{"id":"1","result":{"type":"agent_prompted"}}\n' ;;
