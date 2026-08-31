@@ -336,6 +336,12 @@ then the engine launches anyway:
 3. `ry-couple.sh` says so on stderr, so a dispatch never quietly opens onto a
    broken environment.
 
+Nobody reruns the script by hand. The engine is still working in that siding,
+so a rerun would move the worktree and the database under it while the engine
+still holds the original "setup failed" notice. Fixing a project's setup is a
+change to a project, which means a new engine on a fresh siding — after the
+affected one has been stopped or decoupled.
+
 A script that hangs is worse than one that fails: it would hold the dispatch
 open with no engine and no inbox line. So it is killed after **600 seconds**,
 along with anything it started, and reported as a timeout rather than an exit
@@ -345,8 +351,12 @@ status — the two mean different things to whoever debugs it:
 [railyard] engine <id> start-script-failed: timeout 600s; output in state/<id>.start.log
 ```
 
-`RY_START_TIMEOUT` overrides the bound, in seconds. It exists so the test suite
-does not sit for ten minutes; there is no reason to set it by hand.
+`RY_START_TIMEOUT` overrides the bound, in seconds. It must be a whole number
+of at least 1; anything else (a typo, a unit suffix) is refused out loud on
+stderr and the 600-second default is used instead, because an unusable bound
+would leave the watchdog never firing — exactly the hang it exists to prevent.
+It exists so the test suite does not sit for ten minutes; there is no reason to
+set it by hand.
 
 ## The daily loop
 

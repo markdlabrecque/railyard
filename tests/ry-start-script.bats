@@ -216,6 +216,33 @@ EOF
   [ "$status" -ne 0 ]
 }
 
+# `[ 0 -ge abc ]` errors and stays false, so an unvalidated bound would leave
+# the watchdog never firing: the hang the timeout exists to prevent, reachable
+# by a typo in an environment variable.
+@test "a non-numeric RY_START_TIMEOUT is refused out loud and does not hang" {
+  make_start_script xyz <<'EOF'
+echo starting
+sleep 120
+EOF
+  for bad in abc 10s -5 0 " "; do
+    rm -f "$RY_HOME/state/events.log"
+    RY_START_TIMEOUT="$bad" RY_START_TIMEOUT_DEFAULT=1 run ry-dispatch.sh --haul xyz "x"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"RY_START_TIMEOUT=$bad"* ]] || { echo "accepted '$bad'"; false; }
+    [[ "$output" == *"start-script=failed (timeout 1s)"* ]]
+  done
+}
+
+@test "an empty RY_START_TIMEOUT falls back to the default without complaint" {
+  make_start_script xyz <<'EOF'
+sleep 120
+EOF
+  RY_START_TIMEOUT= RY_START_TIMEOUT_DEFAULT=1 run ry-dispatch.sh --haul xyz "x"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"RY_START_TIMEOUT="* ]]
+  [[ "$output" == *"start-script=failed (timeout 1s)"* ]]
+}
+
 @test "the default bound is 600 seconds" {
   lib
   [ "$RY_START_TIMEOUT_DEFAULT" -eq 600 ]

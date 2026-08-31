@@ -221,7 +221,10 @@ ry_event() {  # <id> <text>: one line on state/events.log
 # two in step: whoever writes the first one reads that page and nothing else.
 
 RY_START_SCRIPT=".railyard/worktree-start.sh"
-RY_START_TIMEOUT_DEFAULT=600
+# The bound, and the fallback when RY_START_TIMEOUT is unusable. Both are
+# overridable so the test suite can prove the watchdog fires without sitting
+# here for ten minutes; there is no reason to set either by hand.
+RY_START_TIMEOUT_DEFAULT=${RY_START_TIMEOUT_DEFAULT:-600}
 
 ry_fixture_dir() {  # <project> -> fixtures/<project>, created if missing
   local home d; home=$(ry_home); d="$home/fixtures/$1"
@@ -231,6 +234,9 @@ ry_fixture_dir() {  # <project> -> fixtures/<project>, created if missing
 
 ry_start_outcome=""   # set by ry_run_start_script: "" | "exit N" | "timeout Ns"
 
+# Set ry_start_outcome for the caller (ry-couple.sh) to read; that is a
+# cross-file use, which the linter cannot see.
+# shellcheck disable=SC2034
 ry_run_start_script() {  # <id> <siding> <project>: 1 when the script failed
   # Returns 0 when there is no script at all (the common case, and nothing is
   # written), and 0 when the script succeeded. On failure or timeout it returns
@@ -240,10 +246,27 @@ ry_run_start_script() {  # <id> <siding> <project>: 1 when the script failed
   local script="$siding/$RY_START_SCRIPT"
   [ -f "$script" ] || return 0
 
-  local home bindir log secs pid waited rc monitor
+  local home bindir log secs pid waited rc monitor backend fixtures
   home=$(ry_home); log="$home/state/$id.start.log"
   bindir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+  # A bad bound is worse than no bound: `[ 0 -ge abc ]` errors and stays false,
+  # so the watchdog below would never fire and a hanging script would hold the
+  # coupling open forever -- the one failure the timeout exists to prevent,
+  # reachable by a typo. Fall back to the default, out loud: silently ignoring
+  # what someone typed is how you end up debugging the wrong number.
   secs=${RY_START_TIMEOUT:-$RY_START_TIMEOUT_DEFAULT}
+  if ! [[ $secs =~ ^[0-9]+$ ]] || [ "$secs" -lt 1 ]; then
+    printf 'note: RY_START_TIMEOUT=%s is not a whole number of seconds of at least 1; using %s\n' \
+      "$secs" "$RY_START_TIMEOUT_DEFAULT" >&2
+    secs=$RY_START_TIMEOUT_DEFAULT
+  fi
+
+  backend=$(ry_backend 2>/dev/null || echo none)
+  fixtures=$(ry_fixture_dir "$project")
+  local -a envv
+  envv=(RY_HOME="$home" RY_ID="$id" RY_BIN="$bindir" RY_BACKEND="$backend"
+        RY_SIDING="$siding" RY_PROJECT="$project" RY_FIXTURE_PATH="$fixtures")
 
   # Job control gives the script its own process group, so a timeout can kill
   # the whole tree. Without it a hung child of the script would outlive the
@@ -253,11 +276,8 @@ ry_run_start_script() {  # <id> <siding> <project>: 1 when the script failed
   set -m
   (
     cd "$siding" || exit 127
-    export RY_HOME="$home" RY_ID="$id" RY_BIN="$bindir" \
-           RY_BACKEND="$(ry_backend 2>/dev/null || echo none)" \
-           RY_SIDING="$siding" RY_PROJECT="$project" \
-           RY_FIXTURE_PATH="$(ry_fixture_dir "$project")"
-    if [ -x "$script" ]; then exec "$script"; else exec bash "$script"; fi
+    if [ -x "$script" ]; then exec env "${envv[@]}" "$script"
+    else exec env "${envv[@]}" bash "$script"; fi
   ) >"$log" 2>&1 &
   pid=$!
   [ "$monitor" -eq 1 ] || set +m
@@ -289,9 +309,9 @@ Setup notice: this project's own environment setup script
 ($RY_START_SCRIPT) failed before you started -- $outcome. Its output is in
 $home/state/$id.start.log.
 
-Repairing that script, or working around it, is not your job: it is the
-yardmaster's, and the failure has already been reported. Do not edit it and do
-not reinvent what it does.
+Repairing that script, or working around it, is not your job: the failure has
+already been reported to the yardmaster. Do not edit it and do not reinvent
+what it does.
 
 Carry on if the task does not need the environment -- a read-only survey
 usually does not. If it does need it, stop and report BLOCKED saying so. Never

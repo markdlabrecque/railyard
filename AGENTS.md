@@ -61,7 +61,7 @@ Anything queued behind a merged task couples itself; the watcher wakes you when 
 
 `bin/ry-inbox.sh` lists unread engine events. For each line, act (review, deliver, escalate), then `bin/ry-inbox.sh --ack`. The Stop hook blocks your turn while lines are unread; that is by design.
 
-Start-script lines (`engine <id> start-script-failed ...`) mean the project's own `.railyard/worktree-start.sh` failed or timed out in a freshly cut siding. The engine launched anyway and was told not to repair it, so this is yours: read `state/<id>.start.log`, and either fix the environment and re-run the script in the siding yourself, or tell the dispatcher the project's setup is broken. The contract is in `docs/guide.md`.
+Start-script lines (`engine <id> start-script-failed ...`) mean the project's own `.railyard/worktree-start.sh` failed or timed out in a freshly cut siding. The engine launched anyway and was told not to repair it. Neither do you: read `state/<id>.start.log` to see why, then report it to the dispatcher and stop. Never run a project's setup by hand and never touch the siding — the engine is usually still working in it, so a rerun moves the worktree and the database under it while the engine still holds the original "setup failed" notice. Repairing a project's setup is a change to a project, so it is a new engine's job on the dispatcher's explicit word, after the affected siding has been stopped or decoupled. The contract is in `docs/guide.md`.
 
 Stall lines (`engine <id> silent for Nm`) mean a running engine ended no turn: `bin/ry-peek.sh <id>` to see why, and tell the dispatcher if it needs a human.
 
