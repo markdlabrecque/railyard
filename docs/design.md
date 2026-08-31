@@ -179,11 +179,20 @@ two engines would work branches in one clone.
 
 ## Backends
 
-`bin/ry-backend-lib.sh` is the seam. `RY_BACKEND` (`tmux` default, `orca`, or
-`none` for tests) picks the implementation; nothing else in `bin/` branches on
-it. A backend answers eight questions: open an engine terminal, stop it, peek
-at it, send it text, nudge the yardmaster, name this session's own terminal,
-name the claim file, and say whether a terminal is still alive.
+`bin/ry-backend-lib.sh` is the seam. `ry_backend()` picks the implementation
+and nothing else in `bin/` branches on it. Its answer comes from `RY_BACKEND`
+if that is set, then a `backend:` line in `data/yard.md`, then `tmux`. The
+environment winning is deliberate: the test suite runs on `RY_BACKEND=none` and
+overrides it per backend file, and a one-off run in another app should not have
+to edit the yard. The file exists because a yard's backend is a property of the
+yard, not of whatever shell you happen to be in — the same reason
+`data/projects.md` records a project's mode and base — and because getting it
+wrong used to be a stood-down session rather than a running yard.
+
+A backend answers eight questions: open an engine terminal, stop it, peek at
+it, send it text, nudge the yardmaster, name this session's own terminal, name
+the claim file, and say whether a terminal is still alive. There is a ninth it
+may decline: has this engine stopped and started waiting for input?
 
 An engine's backend and target are written into its meta (`backend=`,
 `target=`) when it launches, so `ry-peek.sh`, `ry-send.sh` and `ry-decouple.sh`
@@ -213,6 +222,18 @@ railyard about a second id, both travel in the one `target=` field as
 API's JSON envelope, so nothing is screen-scraped, and `agent prompt` handles
 Claude's bracketed-paste semantics when herdr has recognised the pane as an
 agent — a pane it has not takes literal text plus Enter instead.
+
+herdr also watches the agent in a pane, so it knows an engine has stopped and
+is waiting for input without that engine's Stop hook having fired. The
+temptation was to let herdr report turn ends. That would give one backend its
+own path into the status file, and the contract's whole value is that every
+backend writes it the same way. So `ry_backend_blocked()` answers a narrower
+question — is this engine sitting at a prompt right now — and its only use is
+to raise the watcher's existing "running, and silent" inbox line at once
+instead of after `RY_STALL_MIN` minutes. Backends that cannot tell return
+false and the timer does the work, exactly as before; anything unexpected from
+herdr also reads as "cannot tell", because a false blocked would raise a line
+about an engine that is working.
 
 ## Authority rules (kept from firstmate)
 

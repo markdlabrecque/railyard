@@ -44,10 +44,30 @@ Without that, both yards fight over the session named `railyard` and beta's
 engines open windows in alpha. `bin/ry-yard.sh --dry-run` shows what would
 start. Do not register the same project in two yards.
 
-## Running in Orca
+## Choosing this yard's backend
 
 tmux is the default; Orca, cmux and herdr are the other supported
-**backends** — the thing that hosts terminals. Railyard still owns everything
+**backends** — the thing that hosts terminals. Rather than remember
+`RY_BACKEND` in every shell, record it once in `data/yard.md`:
+
+```
+- `backend: herdr`
+```
+
+`bin/ry-yard.sh` then opens the yard there, and carries the choice into the
+yardmaster, so every engine it dispatches lands in the same app. `RY_BACKEND`
+in the environment still wins, so a one-off override works as before; with
+neither, the yard is a tmux yard.
+
+A yard runs on **one** backend at a time. An engine can only be reached
+through the app that launched it, so railyard refuses to open an engine beside
+engines in another app (`RY_ALLOW_SPLIT=1` overrides). To see a tmux yard from
+somewhere else, use `bin/ry-view.sh` — see below — rather than changing the
+line.
+
+## Running in Orca
+
+Orca, cmux and herdr each host a whole yard. Railyard still owns everything
 that matters (sidings, state, the watcher, the inbox); the backend only decides
 what window an engine appears in.
 
@@ -167,6 +187,10 @@ Two things worth knowing:
   The pane is what peek and send talk to; the tab is what decouple closes.
   Nothing else in railyard has to care, but that is why the field looks
   different from the other backends'.
+- **herdr notices a stuck engine faster.** It watches the agent in each pane,
+  so when an engine stops without ending its turn the watcher raises it in
+  seconds rather than after `RY_STALL_MIN` minutes. Same inbox line, same once
+  per engine; on the other backends the timer still does the work.
 
 ## Watching a tmux yard from another app
 
@@ -304,6 +328,10 @@ Two more session commands:
 
 **`engine <id> silent for Nm`** — a running engine ended no turn. Look at it:
 `bin/ry-peek.sh <id>`.
+
+**`engine <id> waiting for input`** — the same thing, spotted at once instead
+of waited out: the backend says that engine's agent is sitting at a prompt.
+Only herdr can tell railyard this today. Same response: `bin/ry-peek.sh <id>`.
 
 **`engine <id> blocked-stranded <blocker>`** — you decoupled a blocker that
 never merged, so nothing behind it can ever unblock. It is never started

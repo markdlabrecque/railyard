@@ -77,7 +77,7 @@ never touches the release branch; releases are cut outside it.
 _Avoid_: default branch, target branch, trunk, main
 
 **Yard**:
-The whole railyard installation, and the terminals it runs in — a tmux session named `railyard` by default, or Orca terminals / cmux workspaces / herdr tabs when `RY_BACKEND` says so.
+The whole railyard installation, and the terminals it runs in — a tmux session named `railyard` by default, or Orca terminals / cmux workspaces / herdr tabs when `data/yard.md` or `RY_BACKEND` says so.
 
 ### Actions
 

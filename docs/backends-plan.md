@@ -24,17 +24,20 @@ the one decision it deferred.*
 Each is covered by a fake CLI on `PATH` (`tests/fakebin/<name>`) and a bats file
 that mirrors `tests/ry-orca.bats`, so CI needs none of the real apps.
 
-## Still open: which backend a yard uses
+## Settled: which backend a yard uses
 
-Four backends are supported and nothing records which one a yard should use
-beyond `RY_BACKEND` in the environment. Now that the claim names its backend, a
-mismatch is at least *reported* — but the dispatcher still has to set the
-variable correctly every time. If more than one backend is normal for you,
-`data/` should record a default per yard so `bin/ry-yard.sh` needs no env var.
-Worth deciding before the count reaches five.
+`data/yard.md` records it — a `backend:` line, read by `ry_backend()`, sitting
+between `RY_BACKEND` and the `tmux` default. The environment still wins, so
+the test suite and one-off runs are untouched; a yard that records nothing is
+still a tmux yard. Backend errors now name where the answer came from, so a
+typo in the file does not read as a typo in your shell.
 
-## Free upside, not taken
+## Taken: herdr's early warning
 
-`herdr agent wait --until blocked` would let the watcher notice a blocked engine
-without going through the Stop hook. The status-file contract is deliberately
-left alone; this is a later option, not a pending task.
+`herdr agent wait --until blocked` is used, and the status-file contract is
+still untouched. herdr does not get to report turn ends — that would give one
+backend its own path into the status file. It answers a narrower question
+through `ry_backend_blocked()`: is this engine sitting at a prompt right now.
+The only thing that answer does is raise the watcher's existing "running, and
+silent" inbox line in seconds rather than after `RY_STALL_MIN` minutes. Every
+other backend returns false and the timer does the work, as before.
