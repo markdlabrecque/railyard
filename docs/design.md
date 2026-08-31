@@ -14,8 +14,10 @@ In:
 - Harness: Claude Code only.
 - Backends: tmux (reference), Orca, cmux and herdr, behind `bin/ry-backend-lib.sh`. Orca hosts a terminal in our own siding (`orca terminal create --worktree path:<siding>`) after the project clone is registered as an Orca repo; the yardmaster is nudged via `ORCA_TERMINAL_HANDLE`.
 - Worktrees: plain `git worktree add` under `yard/<project>/<id>/`. No treehouse.
-- Delivery modes per task: `local-only` (fast-forward merge on approval),
-  `pr` (open a PR, watch CI), `no-mistakes` (reserved; wired when installed).
+- Delivery modes per task: `local-only` (fast-forward merge on approval) and
+  `pr` (open a PR, watch CI). A third, `no-mistakes`, was reserved and never
+  defined; dispatch refuses it rather than accepting a task nothing can
+  deliver.
 - Two task shapes: **haul** (changes a project, ships) and **survey**
   (read-only investigation, writes a report, never pushes).
 - Supervision: event-driven watcher (Claude Code Stop hook writes a status
@@ -229,6 +231,7 @@ agent — a pane it has not takes literal text plus Enter instead.
 5. `ry-pr.sh`, `ry-pr-poll.sh` (gh).
 6. AGENTS.md + skills (`/manifest`, `/allaboard`, `/shed`, `/dispatch`).
 7. Orca backend behind `RY_BACKEND`. Done.
-8. `no-mistakes` delivery mode.
+8. `no-mistakes` delivery mode. Dropped: never defined, and nothing
+   downstream could deliver it. Dispatch refuses the mode.
 9. Per-project base branches; the queue (`--after`, `ry-couple.sh`,
    `ry-deps.sh`, the watcher's promoter pass). Done.

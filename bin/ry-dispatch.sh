@@ -5,7 +5,7 @@
 # With --after the task is only queued: no siding, no engine. It waits until
 # something couples it, so its siding is cut after its blockers have landed.
 #
-# usage: ry-dispatch.sh (--haul|--survey) [--mode local-only|pr|no-mistakes]
+# usage: ry-dispatch.sh (--haul|--survey) [--mode local-only|pr]
 #                       [--base <branch>] [--after <id>[,<id>...]]
 #                       <project> <waybill>
 # The base branch comes from --base, else the project's data/projects.md line,
@@ -37,7 +37,14 @@ done
 [ -n "$waybill" ] || ry_die "need <waybill>"
 case $shape in
   haul)   mode=${mode:-local-only}
-          case $mode in local-only|pr|no-mistakes) ;; *) ry_die "bad --mode '$mode'";; esac ;;
+          case $mode in
+            local-only|pr) ;;
+            # Accepted here once and implemented by nothing downstream, so the
+            # task could be dispatched and then never delivered. Refused until
+            # it is defined; see docs/dev-plan.md.
+            no-mistakes) ry_die "--mode no-mistakes is not implemented: nothing can deliver it. Use local-only or pr." ;;
+            *) ry_die "bad --mode '$mode' (local-only|pr)" ;;
+          esac ;;
   survey) [ -z "$mode" ] || [ "$mode" = none ] || ry_die "--mode does not apply to --survey"
           mode=none ;;
 esac

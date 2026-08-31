@@ -44,6 +44,19 @@ setup() { setup_home; make_project xyz; }
   [ -z "$(ls "$RY_HOME/state")" ]
 }
 
+# no-mistakes was accepted by dispatch and implemented by nothing downstream:
+# ry-merge-local.sh takes only local-only and ry-pr.sh only pr, so the mode
+# could be dispatched and then never delivered. It is refused until it means
+# something.
+@test "no-mistakes is refused, and its refusal names the modes that work" {
+  run ry-dispatch.sh --haul --mode no-mistakes xyz "x"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no-mistakes"* ]]
+  [[ "$output" == *"local-only"* ]]
+  [[ "$output" == *"pr"* ]]
+  [ -z "$(ls "$RY_HOME/state")" ]
+}
+
 @test "two dispatches get distinct ids" {
   a=$(ry-dispatch.sh --haul xyz "a" | sed -n 's/^id=//p')
   b=$(ry-dispatch.sh --haul xyz "b" | sed -n 's/^id=//p')
