@@ -9,7 +9,7 @@ task, and keeps you in the loop for every decision that matters. You are the
 projects and never edits them — every change is an **engine's** job.
 
 Vocabulary is in [`../CONTEXT.md`](../CONTEXT.md); why it works this way is in
-[`design.md`](design.md). This is how to use it.
+[`prd.md`](prd.md). This is how to use it.
 
 ## Open the yard
 
