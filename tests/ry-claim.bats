@@ -112,7 +112,7 @@ teardown() { teardown_tmux; }
 }
 
 @test "take names the backend mismatch when the session is a terminal of another kind" {
-  run env -u TMUX_PANE CMUX_WORKSPACE_ID=ws-1 ry-claim.sh --take
+  run env -u TMUX_PANE -u ORCA_TERMINAL_HANDLE -u HERDR_PANE_ID CMUX_WORKSPACE_ID=ws-1 ry-claim.sh --take
   [ "$status" -ne 0 ]
   [[ "$output" == *"says tmux"* ]]
   [[ "$output" == *"this session is a cmux terminal"* ]]
@@ -120,7 +120,7 @@ teardown() { teardown_tmux; }
 }
 
 @test "--force does not get past a backend mismatch" {
-  run env -u TMUX_PANE CMUX_WORKSPACE_ID=ws-1 ry-claim.sh --take --force
+  run env -u TMUX_PANE -u ORCA_TERMINAL_HANDLE -u HERDR_PANE_ID CMUX_WORKSPACE_ID=ws-1 ry-claim.sh --take --force
   [ "$status" -ne 0 ]
   [[ "$output" == *"this session is a cmux terminal"* ]]
 }
