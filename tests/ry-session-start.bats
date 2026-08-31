@@ -109,3 +109,19 @@ teardown() {
   TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
   [[ "$output" != *"unfiled learning"* ]]
 }
+
+@test "an engine stands down: no claim, no watcher, no summary" {
+  RY_ID=proj-0101-0000-abcd TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  [ ! -f "$RY_HOME/state/yardmaster.claim" ]
+  [ ! -f "$RY_HOME/state/.watch.lock" ]
+}
+
+@test "an engine does not take a yard another terminal holds" {
+  pane=$(live_pane)
+  hold_yard "$RY_BACKEND" "$pane"
+  RY_ID=proj-0101-0000-abcd TMUX_PANE=%99 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [ "$(claim_target)" = "$pane" ]
+}

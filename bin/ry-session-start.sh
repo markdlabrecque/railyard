@@ -10,6 +10,12 @@
 # share one inbox and take work from each other. Because the claim names its
 # backend, a session that starts on a different backend from the one holding
 # the yard is told that too, instead of quietly claiming alongside it.
+#
+# An engine stands down (RY_ID set). A siding cut from railyard itself carries
+# railyard's own .claude/settings.json, so this hook fires inside the engine —
+# and the engine's RY_HOME points at the live yard, not its siding. Without
+# this guard the engine claims the yard out from under the yardmaster and
+# starts a second watcher on it. Same guard as ry-turnend-guard.sh.
 # usage: Claude SessionStart hook, run from the railyard home.
 set -uo pipefail
 # shellcheck source=bin/ry-lib.sh
@@ -17,6 +23,7 @@ set -uo pipefail
 # shellcheck source=bin/ry-backend-lib.sh
 . "$(dirname "$0")/ry-backend-lib.sh"
 case ${1:-} in -h|--help) ry_usage "$0"; exit 0 ;; esac
+[ -z "${RY_ID:-}" ] || exit 0
 home=$(ry_home); st="$home/state"; bindir=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$st"
 cat >/dev/null || true   # drain hook stdin
