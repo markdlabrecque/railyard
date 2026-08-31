@@ -104,9 +104,25 @@ teardown() { teardown_tmux; }
 }
 
 @test "take refuses when this session has no terminal" {
-  run env -u TMUX_PANE ry-claim.sh --take
+  run env -u TMUX_PANE -u CMUX_WORKSPACE_ID -u HERDR_PANE_ID -u ORCA_TERMINAL_HANDLE \
+    ry-claim.sh --take
   [ "$status" -ne 0 ]
   [[ "$output" == *"no"*"terminal"* ]]
+  [[ "$output" == *"--force does not cover this"* ]]
+}
+
+@test "take names the backend mismatch when the session is a terminal of another kind" {
+  run env -u TMUX_PANE CMUX_WORKSPACE_ID=ws-1 ry-claim.sh --take
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"says tmux"* ]]
+  [[ "$output" == *"this session is a cmux terminal"* ]]
+  [[ "$output" == *"--force does not cover this"* ]]
+}
+
+@test "--force does not get past a backend mismatch" {
+  run env -u TMUX_PANE CMUX_WORKSPACE_ID=ws-1 ry-claim.sh --take --force
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"this session is a cmux terminal"* ]]
 }
 
 @test "an unknown option is refused" {

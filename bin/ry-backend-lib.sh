@@ -154,6 +154,14 @@ ry_backend_self() {  # -> this session's terminal id, empty if it has none
   esac
 }
 
+ry_backend_looks_like() {  # -> the backend this session's environment says it is, empty if none
+  if   [ -n "${ORCA_TERMINAL_HANDLE:-}" ]; then printf 'orca\n'
+  elif [ -n "${CMUX_WORKSPACE_ID:-}" ];    then printf 'cmux\n'
+  elif [ -n "${HERDR_PANE_ID:-}" ];        then printf 'herdr\n'
+  elif [ -n "${TMUX_PANE:-}" ];            then printf 'tmux\n'
+  fi
+}
+
 ry_backend_claim_file() {  # -> the one file holding the yard claim
   printf '%s\n' "$(ry_home)/state/yardmaster.claim"
 }

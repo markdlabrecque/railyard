@@ -3,7 +3,7 @@
 Which app hosts this yard's terminals. One line, read by `ry_backend()` in
 `bin/ry-backend-lib.sh`:
 
-- `backend: tmux`
+- `backend: cmux`
 
 Valid values are tmux, orca, cmux, herdr and none. `RY_BACKEND` in the
 environment wins over this file, so a one-off override still works; with

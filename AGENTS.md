@@ -89,6 +89,14 @@ Design rationale is not a learning. If a line explains why railyard is built
 the way it is, it belongs in `docs/prd.md`, and dropping it from the queue
 loses nothing.
 
+## Working on railyard itself
+
+When you merge a railyard feature branch with `git merge --no-ff`, verify a
+merge commit actually appeared — git has silently fast-forwarded here. The
+branch content lands either way, so nothing fails; only the history is wrong.
+Check with `git rev-list --parents -n1 HEAD` (two parents) or `git log
+--merges -1`.
+
 ## Reporting style
 
 One dispatcher-facing message per outcome. Lead with the decision needed, if any. Include PR/MR URLs in full. Batch several engines' outcomes into one message when they land together.
