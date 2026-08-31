@@ -1,16 +1,9 @@
 #!/usr/bin/env bats
 load helpers
-setup() { setup_home; }
+setup() { setup_home; setup_tmux; }
 teardown() {
   pid=$(cat "$RY_HOME/state/.watch.lock" 2>/dev/null); [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
   teardown_tmux
-}
-
-# A live pane to hold the yard against.
-live_pane() {
-  setup_tmux
-  tmux -L "$RY_TMUX_SOCKET" new-session -d -s held "sleep 30"
-  tmux -L "$RY_TMUX_SOCKET" display -p -t held '#{pane_id}'
 }
 
 @test "session start records the pane, starts one watcher, prints a summary" {
@@ -27,6 +20,8 @@ live_pane() {
   TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
   [ "$status" -eq 0 ]
   [[ "$output" == *"you are the yardmaster"* ]]
+  # nothing to take: the take line belongs only to a session that stood down
+  [[ "$output" != *"ry-claim.sh"* ]]
 }
 
 @test "reclaiming from the same pane is not a collision" {
@@ -45,11 +40,12 @@ live_pane() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"another yardmaster"* ]]
   [[ "$output" == *"$pane"* ]]
+  # a stood-down session is handed the one command that could change its standing
+  [[ "$output" == *"bin/ry-claim.sh --take --force"* ]]
   [ "$(claim_target)" = "$pane" ]
 }
 
 @test "a session takes the yard when the holding pane is gone" {
-  setup_tmux
   hold_yard "$RY_BACKEND" "%404"
   TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
   [ "$status" -eq 0 ]
@@ -80,6 +76,7 @@ live_pane() {
   RY_BACKEND=orca ORCA_TERMINAL_HANDLE=term_x run ry-session-start.sh <<<'{}'
   [ "$status" -eq 0 ]
   [[ "$output" == *"holds the yard on the tmux backend"* ]]
+  [[ "$output" == *"bin/ry-claim.sh --take --force"* ]]
   [ "$(claim_backend)" = tmux ]
   [ "$(claim_target)" = "$pane" ]
 }

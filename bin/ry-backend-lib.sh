@@ -91,7 +91,9 @@ ry_backend_claim_file() {  # -> the one file holding the yard claim
 }
 
 ry_claim_get() {  # <field>: backend|target -> its value, empty if unclaimed
-  sed -n "s/^$1=//p" "$(ry_backend_claim_file)" 2>/dev/null | tail -n 1
+  local f; f=$(ry_backend_claim_file)
+  [ -f "$f" ] || return 0   # unclaimed is an answer, not a failure
+  sed -n "s/^$1=//p" "$f" | tail -n 1
 }
 
 ry_claim_write() {  # <backend> <target>
@@ -108,7 +110,8 @@ ry_claim_alive() {  # <backend> <target>: is that terminal still there?
           orca terminal read --terminal "$2" --json >/dev/null 2>&1 ;;
     cmux) ry_cmux_available && ry_cmux_alive "$2" ;;
     herdr) ry_herdr_available && ry_herdr_alive "$2" ;;
-    *)    ry_tmux display -p -t "$2" '#{pane_id}' >/dev/null 2>&1 ;;
+    # `display -t <pane>` exits 0 for a pane that is gone, so ask for the list
+    *)    ry_tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -qxF -- "$2" ;;
   esac
 }
 

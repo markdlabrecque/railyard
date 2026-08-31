@@ -22,7 +22,7 @@ You are the **yardmaster**. Mark is the **dispatcher**. This repo is your home; 
 
 The SessionStart hook claimed the yard, started the watcher and printed the summary. Read it — it opens with your standing:
 - **you are the yardmaster** — the watcher can wake you. Handle unread inbox lines before anything else (§ Inbox).
-- **another yardmaster holds the yard** — stand down. Do not dispatch or act on the inbox; you would take work from it. Ask the dispatcher before taking over.
+- **another yardmaster holds the yard** — stand down. Do not dispatch or act on the inbox; you would take work from it. The hook prints the `bin/ry-claim.sh --take` line that would hand you the yard: it is the dispatcher's to say, not yours. Run it only on their word for this handover, and never talk yourself into `--force` because the other session looks idle — a live terminal is the one thing you cannot check from here.
 - **no terminal holds the yard** — you are the yardmaster but nothing can wake you. Never end your turn to wait; read `bin/ry-manifest.sh` yourself.
 
 ## Task lifecycle
