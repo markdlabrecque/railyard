@@ -124,11 +124,21 @@ ry_prefix_valid() {  # <token>: one hostname-label-safe word
   [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]]
 }
 
-ry_ddev_name() {  # <prefix> <project> -> a valid hostname label, 63 chars max
+RY_DDEV_NAME_MAX=63   # a DDEV project name has to be a valid hostname label
+
+ry_ddev_name() {  # <prefix> <project> -> the name, or 1 when it does not fit
+  # No truncation: two prefixes differing only past the limit would cut down to
+  # one DDEV project name, which is the collision this whole change exists to
+  # prevent. A prefix that long is a mistake worth naming, so it is refused at
+  # dispatch time (see ry-dispatch.sh) and refused again here.
   local n="$1-$2"
-  n=${n:0:63}
-  while [ "${n%-}" != "$n" ]; do n=${n%-}; done   # truncation must not end in -
+  [ ${#n} -le $RY_DDEV_NAME_MAX ] || return 1
   printf '%s\n' "$n"
+}
+
+ry_ddev_name_too_long() {  # <prefix> <project>: message for a name that will not fit
+  printf "'%s-%s' is %d characters; a DDEV project name is a hostname label, so it cannot exceed %d. Use a shorter --prefix (a ticket number, or one short word)." \
+    "$1" "$2" "$((${#1} + 1 + ${#2}))" "$RY_DDEV_NAME_MAX"
 }
 
 ry_ddev_write_override() {  # <siding> <project> <prefix>: no-op without .ddev/
@@ -136,8 +146,9 @@ ry_ddev_write_override() {  # <siding> <project> <prefix>: no-op without .ddev/
   [ -d "$siding/.ddev" ] || return 0
   git -C "$siding" check-ignore -q -- "$RY_DDEV_OVERRIDE" || ry_die \
     "project '$project' does not gitignore $RY_DDEV_OVERRIDE. Railyard writes that file into every siding of a DDEV project to give it its own DDEV project name; if the project tracks it, the siding is dirty from the moment it is cut and ry-pr.sh will later refuse to open the PR. Add $RY_DDEV_OVERRIDE to the project's .gitignore, then couple again."
-  name=$(ry_ddev_name "$prefix" "$project")
-  cat > "$siding/$RY_DDEV_OVERRIDE" <<YAML
+  name=$(ry_ddev_name "$prefix" "$project") \
+    || ry_die "cannot name this siding's DDEV project: $(ry_ddev_name_too_long "$prefix" "$project")"
+  cat > "$siding/$RY_DDEV_OVERRIDE" <<YAML || return 1
 # Written by railyard when this siding was coupled. Gitignored, never committed.
 # Its own DDEV project name, so this siding does not clash with another siding
 # of $project or with your own checkout.
@@ -149,13 +160,18 @@ YAML
 ry_ddev_delete() {  # <siding>: remove the siding's DDEV project; never fatal
   local siding=$1 name
   [ -d "$siding/.ddev" ] || return 0
-  name=$(sed -n 's/^name: *//p' "$siding/$RY_DDEV_OVERRIDE" 2>/dev/null | head -n 1)
+  # A siding cut before railyard wrote overrides has .ddev/ and no override:
+  # nothing of ours to delete, and decouple must still reach the worktree.
+  [ -f "$siding/$RY_DDEV_OVERRIDE" ] || return 0
+  name=$(sed -n 's/^name: *//p' "$siding/$RY_DDEV_OVERRIDE" | head -n 1)
   [ -n "$name" ] || return 0
   if ! command -v ddev >/dev/null 2>&1; then
     printf 'note: ddev is not on PATH; DDEV project %s left in place\n' "$name" >&2
     return 0
   fi
-  ( cd "$siding" && ddev delete -O "$name" ) >/dev/null 2>&1 \
-    || printf 'note: ddev delete -O %s failed; that DDEV project may still exist\n' "$name" >&2
+  # --yes: `ddev delete` prompts for confirmation, and redirecting its output
+  # does not close stdin, so without this a decouple sits there forever.
+  ( cd "$siding" && ddev delete --omit-snapshot --yes "$name" ) >/dev/null 2>&1 \
+    || printf 'note: ddev delete --omit-snapshot --yes %s failed; that DDEV project may still exist\n' "$name" >&2
   return 0
 }

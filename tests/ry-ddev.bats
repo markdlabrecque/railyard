@@ -47,16 +47,42 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
 
 # --- the name ----------------------------------------------------------------
 
-@test "ry_ddev_name caps at 63 characters and never ends in a dash" {
+@test "ry_ddev_name joins prefix and project" {
   lib
   run ry_ddev_name 3a8d island-health
+  [ "$status" -eq 0 ]
   [ "$output" = "3a8d-island-health" ]
-  long=$(printf 'p%.0s' $(seq 1 80))
-  run ry_ddev_name "$long" island-health
+}
+
+# Truncating to 63 would map two prefixes that differ only past the limit onto
+# one DDEV project name -- the exact collision this change exists to prevent.
+@test "ry_ddev_name refuses a name over 63 characters rather than truncating" {
+  lib
+  run ry_ddev_name "$(printf 'p%.0s' $(seq 1 61))" x   # 61 + 1 + 1 = 63
+  [ "$status" -eq 0 ]
   [ "${#output}" -eq 63 ]
-  run ry_ddev_name "$(printf 'p%.0s' $(seq 1 62))" x
-  [ "${#output}" -eq 62 ]      # the trailing dash left by the cut is dropped
-  [[ "$output" != *- ]]
+  run ry_ddev_name "$(printf 'p%.0s' $(seq 1 62))" x   # one over
+  [ "$status" -ne 0 ]
+  [ -z "$output" ]
+}
+
+@test "an over-long --prefix is refused at dispatch, not truncated" {
+  long=$(printf 'p%.0s' $(seq 1 80))
+  run ry-dispatch.sh --haul --prefix "$long" xyz "x"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--prefix"* ]]
+  [[ "$output" == *"63"* ]]
+  [ -z "$(ls "$RY_HOME/state")" ]
+  [ -z "$(ls "$RY_HOME/yard")" ]
+}
+
+# The longest prefix that still fits must be accepted: the guard is a limit,
+# not a excuse to refuse legitimate names.
+@test "the longest prefix that fits is accepted end to end" {
+  make_ddev_project xyz
+  fits=$(printf 'p%.0s' $(seq 1 59))   # 59 + 1 + len("xyz") = 63
+  id=$(ry-dispatch.sh --haul --prefix "$fits" xyz "x" | sed -n 's/^id=//p')
+  grep -q "^name: $fits-xyz\$" "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
 }
 
 # --- couple ------------------------------------------------------------------
@@ -85,6 +111,9 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
 
 @test "a project that tracks config.local.yaml fails loudly and writes nothing" {
   make_ddev_project xyz --tracked
+  # the project really does track it: the failure path under test is "tracked",
+  # not merely "no ignore rule"
+  git -C "$RY_HOME/projects/xyz" ls-files --error-unmatch .ddev/config.local.yaml
   run ry-dispatch.sh --haul xyz "x"
   [ "$status" -ne 0 ]
   [[ "$output" == *"gitignore"* ]]
@@ -92,24 +121,17 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   [ -z "$(ls "$RY_HOME/yard/xyz" 2>/dev/null)" ]
 }
 
-@test "the override is on disk before the engine is launched" {
+@test "a failed override write is reported, not swallowed as success" {
+  [ "$(id -u)" -ne 0 ] || skip "root ignores the read-only directory"
+  lib
   make_ddev_project xyz
-  # ry-couple.sh reaches its sibling ry-engine-launch.sh by path, so the only
-  # honest way to see the ordering is to run a copy of bin/ whose launcher is
-  # a probe.
-  probe="$BATS_TEST_TMPDIR/probebin"
-  cp -R "$BATS_TEST_DIRNAME/../bin" "$probe"
-  cat > "$probe/ry-engine-launch.sh" <<'PROBE'
-#!/usr/bin/env bash
-siding=$(sed -n 's/^siding=//p' "$RY_HOME/state/$1.meta")
-if [ -f "$siding/.ddev/config.local.yaml" ]; then s=present; else s=absent; fi
-printf '%s\n' "$s" > "$RY_HOME/launch-saw"
-PROBE
-  chmod +x "$probe/ry-engine-launch.sh"
-  id=$(ry-dispatch.sh --haul --after "$(ry-dispatch.sh --haul xyz a | sed -n 's/^id=//p')" xyz "x" | sed -n 's/^id=//p')
-  RY_BACKEND=tmux run "$probe/ry-couple.sh" "$id"
-  [ "$status" -eq 0 ]
-  [ "$(cat "$RY_HOME/launch-saw")" = present ]
+  siding="$BATS_TEST_TMPDIR/probe-siding"
+  git -C "$RY_HOME/projects/xyz" worktree add -q -b probe "$siding" origin/main
+  chmod a-w "$siding/.ddev"
+  run ry_ddev_write_override "$siding" xyz 308
+  chmod u+w "$siding/.ddev"
+  [ "$status" -ne 0 ]
+  [ ! -f "$siding/.ddev/config.local.yaml" ]
 }
 
 # --- decouple ----------------------------------------------------------------
@@ -119,8 +141,34 @@ PROBE
   id=$(ry-dispatch.sh --haul --prefix 308 xyz "x" | sed -n 's/^id=//p')
   run ry-decouple.sh "$id"
   [ "$status" -eq 0 ]
-  grep -q -- 'ddev delete -O 308-xyz' "$RY_FAKE_DDEV_LOG"
+  grep -q -- '308-xyz' "$RY_FAKE_DDEV_LOG"
   [ ! -e "$RY_HOME/yard/xyz/$id" ]
+}
+
+# The real `ddev delete` prompts and waits on stdin; the fake refuses a delete
+# without --yes for that reason. Drop the flag and this test goes red.
+@test "the delete is non-interactive: --yes is passed" {
+  make_ddev_project xyz
+  id=$(ry-dispatch.sh --haul --prefix 308 xyz "x" | sed -n 's/^id=//p')
+  run ry-decouple.sh "$id"
+  [ "$status" -eq 0 ]
+  grep -qE -- '(--yes|(^| )-[A-Za-z]*y)' "$RY_FAKE_DDEV_LOG"
+  # and the fake really would have caught its absence
+  run "$BATS_TEST_DIRNAME/fakebin/ddev" delete --omit-snapshot 308-xyz
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"prompt"* ]] || [[ "$output" == *"hang"* ]]
+  run "$BATS_TEST_DIRNAME/fakebin/ddev" delete -Oy 308-xyz
+  [ "$status" -eq 0 ]
+}
+
+@test "a siding with .ddev/ but no override still decouples" {
+  make_ddev_project xyz
+  id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
+  rm -f "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"   # cut before this change
+  run ry-decouple.sh "$id"
+  [ "$status" -eq 0 ]
+  [ ! -e "$RY_HOME/yard/xyz/$id" ]
+  [ ! -s "$RY_FAKE_DDEV_LOG" ]
 }
 
 @test "decouple runs no ddev for a project without .ddev/" {

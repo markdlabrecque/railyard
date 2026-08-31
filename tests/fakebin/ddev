@@ -1,7 +1,23 @@
 #!/usr/bin/env bash
 # Fake ddev CLI. Logs args; answers the one command railyard uses.
+#
+# It refuses a `delete` that does not pass --yes/-y, because the real ddev does
+# not fail there — it prints "OK to delete...?" and waits on stdin forever. A
+# fake that accepts what the real tool would block on manufactures confidence,
+# so this one turns that hang into a loud failure the suite can see.
 printf 'ddev %s\n' "$*" >> "$RY_FAKE_DDEV_LOG"
 case "$1" in
-  delete) [ -z "${RY_FAKE_DDEV_FAIL:-}" ] || { echo "fake ddev: delete failed" >&2; exit 1; } ;;
+  delete)
+    yes=0
+    for a in "$@"; do
+      case $a in
+        --yes|-y) yes=1 ;;
+        -[A-Za-z]*) case ${a#-} in *y*) yes=1 ;; esac ;;   # bundled, e.g. -Oy
+      esac
+    done
+    [ "$yes" -eq 1 ] || {
+      echo "fake ddev: 'delete' without --yes would prompt and hang" >&2; exit 1; }
+    [ -z "${RY_FAKE_DDEV_FAIL:-}" ] || { echo "fake ddev: delete failed" >&2; exit 1; }
+    ;;
   *) echo "fake ddev: unhandled $*" >&2; exit 1 ;;
 esac

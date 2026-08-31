@@ -124,6 +124,12 @@ make_ddev_project() {  # <name> [--tracked]
   dir="$RY_HOME/projects/$name"
   mkdir -p "$dir/.ddev"
   printf 'name: %s\n' "$name" > "$dir/.ddev/config.yaml"
-  [ "${2:-}" = --tracked ] || printf '/.ddev/config.local.yaml\n' > "$dir/.gitignore"
+  if [ "${2:-}" = --tracked ]; then
+    # Actually tracked: committed, with no ignore rule. Anything less tests
+    # "not ignored", which is a different thing from "the project tracks it".
+    printf 'name: committed-by-the-project\n' > "$dir/.ddev/config.local.yaml"
+  else
+    printf '/.ddev/config.local.yaml\n' > "$dir/.gitignore"
+  fi
   ( cd "$dir" && git add -A && git commit -qm ddev && git push -q origin HEAD )
 }
