@@ -3,6 +3,9 @@
 # flag (see issue #5), so the hook cannot live only in --settings; it must
 # also be registered in the siding itself, where Claude Code reads project
 # settings regardless of how the session started.
+# `run --separate-stderr` is a bats >= 1.5 flag; without this the run warns
+# BW02 on every use of it.
+bats_require_minimum_version 1.5.0
 load helpers
 
 setup() {
@@ -119,6 +122,92 @@ JSON
   [ -z "$(git -C "$siding" status --porcelain)" ]
 }
 
+@test "a plain dispatch never prints check-ignore's fatal error on stderr" {
+  # `git check-ignore -q` only accepts one pathname; ry_gitignore_stop_hook
+  # used to pass it two, which exits 128 and prints
+  # "fatal: --quiet is only valid with a single pathname" on every dispatch
+  # (issue #27). Some backends/environments may still put benign chatter on
+  # stderr, so pin down the specific failure rather than requiring silence.
+  run --separate-stderr ry-dispatch.sh --haul xyz "task"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" != *"fatal:"* ]]
+  [[ "$stderr" != *"error:"* ]]
+}
+
+@test "when both the settled path and its mktemp sibling are already ignored, nothing is written to info/exclude" {
+  # A project whose own .gitignore already covers both paths needs nothing
+  # appended. The buggy two-pathname check-ignore call always errors (exit
+  # 128), so the `&& return 0` never fires and the line gets written anyway --
+  # this must fail on that bug.
+  echo '.claude/settings.local.json*' >> "$RY_HOME/projects/xyz/.gitignore"
+  ( cd "$RY_HOME/projects/xyz" && git add -A && git commit -qm gitignore && git push -q origin HEAD )
+  id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
+  wait_for_log
+  siding="$RY_HOME/yard/xyz/$id"
+  common=$(git -C "$siding" rev-parse --git-common-dir)
+  common=$(cd "$siding" && cd "$common" && pwd)
+  if [ -f "$common/info/exclude" ]; then
+    # `!` exempts the very next command from bats' errexit, so a bare
+    # `! grep ...` here would silently pass even on a match -- run it and
+    # check $status instead.
+    run grep -qxF '.claude/settings.local.json*' "$common/info/exclude"
+    [ "$status" -ne 0 ]
+  fi
+  [ -z "$(git -C "$siding" status --porcelain)" ]
+}
+
+@test "when neither path is ignored, the exclude line is written exactly once" {
+  id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
+  wait_for_log
+  siding="$RY_HOME/yard/xyz/$id"
+  common=$(git -C "$siding" rev-parse --git-common-dir)
+  common=$(cd "$siding" && cd "$common" && pwd)
+  [ -f "$common/info/exclude" ]
+  [ "$(grep -c -F '.claude/settings.local.json*' "$common/info/exclude")" -eq 1 ]
+}
+
+@test "a second launch when nothing was ignored does not grow info/exclude" {
+  id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
+  wait_for_log
+  siding="$RY_HOME/yard/xyz/$id"
+  ry-engine-launch.sh "$id"
+  common=$(git -C "$siding" rev-parse --git-common-dir)
+  [ "$(grep -c -F '.claude/settings.local.json*' "$common/info/exclude")" -eq 1 ]
+}
+
+@test "a second launch when both paths were already ignored still writes nothing" {
+  echo '.claude/settings.local.json*' >> "$RY_HOME/projects/xyz/.gitignore"
+  ( cd "$RY_HOME/projects/xyz" && git add -A && git commit -qm gitignore && git push -q origin HEAD )
+  id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
+  wait_for_log
+  siding="$RY_HOME/yard/xyz/$id"
+  ry-engine-launch.sh "$id"
+  common=$(git -C "$siding" rev-parse --git-common-dir)
+  common=$(cd "$siding" && cd "$common" && pwd)
+  if [ -f "$common/info/exclude" ]; then
+    run grep -qxF '.claude/settings.local.json*' "$common/info/exclude"
+    [ "$status" -ne 0 ]
+  fi
+  [ -z "$(git -C "$siding" status --porcelain)" ]
+}
+
+@test "unit: ry_gitignore_stop_hook returns 0, writes nothing and prints nothing on stderr when both paths are ignored" {
+  repo="$BATS_TEST_TMPDIR/unit-repo"
+  mkdir -p "$repo"
+  ( cd "$repo" && git init -q . && echo '.claude/settings.local.json*' > .gitignore &&
+    git add -A && git -c user.email=t@t -c user.name=t commit -qm init )
+  source "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"
+  run --separate-stderr ry_gitignore_stop_hook "$repo"
+  [ "$status" -eq 0 ]
+  [ -z "$stderr" ]
+  common=$(cd "$repo" && git rev-parse --git-common-dir)
+  common=$(cd "$repo" && cd "$common" && pwd)
+  if [ -f "$common/info/exclude" ]; then
+    run grep -qxF '.claude/settings.local.json*' "$common/info/exclude"
+    [ "$status" -ne 0 ]
+  fi
+}
+
 @test "a project rule that covers only the settled file still gets the sibling covered" {
   # `.claude/settings.local.json` alone leaves settings.local.json.aB3xY9
   # untracked, so railyard must not treat it as good enough and return early.
@@ -127,6 +216,9 @@ JSON
   id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
   wait_for_log
   siding="$RY_HOME/yard/xyz/$id"
+  common=$(git -C "$siding" rev-parse --git-common-dir)
+  common=$(cd "$siding" && cd "$common" && pwd)
+  [ "$(grep -c -F '.claude/settings.local.json*' "$common/info/exclude")" -eq 1 ]
   touch "$siding/.claude/settings.local.json.aB3xY9"
   [ -z "$(git -C "$siding" status --porcelain)" ]
 }
