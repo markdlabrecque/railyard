@@ -163,6 +163,64 @@ ry_claude_trust() {  # <dir>: pre-accept Claude Code's folder-trust dialog for d
   fi
 }
 
+# --- the siding's own Stop hook ---------------------------------------------
+# --settings on the claude argv is not enough: a `--resume` relaunch (Claude
+# Code's own retry on a dropped connection, or a manual one) drops every argv
+# flag, --settings included, and the engine goes silent forever (issue #5).
+# Claude Code reads project settings.local.json on every launch regardless of
+# how it started, so the hook is registered there too, merged with whatever a
+# project or a previous launch already put in that file.
+
+RY_STOP_HOOK_FILE=".claude/settings.local.json"
+
+ry_write_stop_hook() {  # <siding> <bindir>: register ry-engine-stop.sh as the Stop hook, merged
+  # Never settings.json -- railyard's own sidings carry a tracked one, and
+  # this file must stay untracked and per-siding. Old railyard entries (same
+  # command) are dropped before the fresh one is added, so re-running this is
+  # a no-op rather than a growing list; every other Stop entry is untouched.
+  local siding=$1 bindir=$2 cmd src tmp
+  local dir="$siding/.claude"
+  mkdir -p "$dir"
+  cmd="exec $bindir/ry-engine-stop.sh"
+  src='{}'; [ -f "$dir/settings.local.json" ] && src=$(cat "$dir/settings.local.json")
+  tmp=$(mktemp "$dir/settings.local.json.XXXXXX")
+  if printf '%s' "$src" | jq --arg cmd "$cmd" '
+      .hooks.Stop //= [] |
+      .hooks.Stop |= (map(.hooks |= (map(select(.command != $cmd)))) | map(select((.hooks | length) > 0))) |
+      .hooks.Stop += [{hooks: [{type: "command", command: $cmd}]}]
+    ' > "$tmp"; then
+    mv "$tmp" "$dir/settings.local.json"
+  else
+    rm -f "$tmp"; ry_die "could not update $dir/settings.local.json"
+  fi
+}
+
+ry_gitignore_stop_hook() {  # <siding>: keep the siding clean after ry_write_stop_hook
+  # Only touches the project's own gitignore machinery when the project has
+  # not already excluded the file itself; the check-and-append is written
+  # once, so a second launch never grows the exclude file. Scoped to the
+  # project's own ignore rules with `-c core.excludesfile=`: whoever runs the
+  # engine may have a personal global gitignore of their own (this exact
+  # pattern is a natural one to keep for Claude Code work), but the decision
+  # of whether *this project* already ignores the file must not depend on the
+  # operator's machine, or another engine on another host would go dirty.
+  local siding=$1 common
+  git -C "$siding" -c core.excludesfile=/dev/null check-ignore -q -- "$RY_STOP_HOOK_FILE" && return 0
+  common=$(git -C "$siding" rev-parse --git-common-dir)
+  grep -qxF "$RY_STOP_HOOK_FILE" "$common/info/exclude" 2>/dev/null && return 0
+  printf '%s\n' "$RY_STOP_HOOK_FILE" >> "$common/info/exclude"
+}
+
+ry_stop_hook_registered() {  # <siding>: does it register ry-engine-stop.sh as a Stop hook?
+  # Used by the watcher to tell a merely-slow engine from one that can never
+  # report on its own (issue #5): no file, unreadable JSON, or no matching
+  # command all count as "not registered".
+  local siding=$1
+  local f="$siding/$RY_STOP_HOOK_FILE"
+  [ -f "$f" ] || return 1
+  jq -e '[.hooks.Stop[]?.hooks[]?.command] | any(test("ry-engine-stop.sh"))' "$f" >/dev/null 2>&1
+}
+
 # --- DDEV -------------------------------------------------------------------
 # Two sidings of the same project cannot both run `ddev` under one project
 # name, and neither can a siding and Mark's own checkout. The fix is one line
