@@ -10,6 +10,15 @@ teardown() { teardown_tmux; }
 
 end_turn() { RY_ID=$1 ry-engine-stop.sh <<<"{\"transcript_path\":\"$T\",\"stop_hook_active\":false}"; }
 
+# What ry-engine-launch.sh leaves in a siding: the Stop hook registered where a
+# --resume relaunch cannot drop it. The watcher reads it to tell a slow engine
+# from a severed one.
+register_stop_hook() {  # <siding>
+  mkdir -p "$1/.claude"
+  jq -n --arg cmd "exec $BATS_TEST_DIRNAME/../bin/ry-engine-stop.sh" \
+    '{hooks:{Stop:[{hooks:[{type:"command",command:$cmd}]}]}}' > "$1/.claude/settings.local.json"
+}
+
 @test "watch --once turns a turn-ended event into an inbox line, once" {
   end_turn "$ID"
   run ry-watch.sh --once
@@ -42,6 +51,9 @@ end_turn() { RY_ID=$1 ry-engine-stop.sh <<<"{\"transcript_path\":\"$T\",\"stop_h
 @test "watch flags a running engine that has been silent too long, once" {
   echo running > "$RY_HOME/state/$ID.status"
   touch -t 202001010000 "$RY_HOME/state/$ID.status"
+  # Merely slow, not severed: the siding still registers the Stop hook, so this
+  # engine can still report and the line is about silence, not disconnection.
+  register_stop_hook "$RY_HOME/yard/xyz/$ID"
   RY_STALL_MIN=5 run ry-watch.sh --once
   grep -q "engine $ID silent for" "$RY_HOME/state/inbox.md"
   RY_STALL_MIN=5 run ry-watch.sh --once
@@ -63,11 +75,7 @@ end_turn() { RY_ID=$1 ry-engine-stop.sh <<<"{\"transcript_path\":\"$T\",\"stop_h
 @test "stall line stays 'silent for Nm' when the siding still registers the Stop hook" {
   echo running > "$RY_HOME/state/$ID.status"
   touch -t 202001010000 "$RY_HOME/state/$ID.status"
-  siding="$RY_HOME/yard/xyz/$ID"
-  mkdir -p "$siding/.claude"
-  jq -n --arg cmd "exec $BATS_TEST_DIRNAME/../bin/ry-engine-stop.sh" \
-    '{hooks:{Stop:[{hooks:[{type:"command",command:$cmd}]}]}}' \
-    > "$siding/.claude/settings.local.json"
+  register_stop_hook "$RY_HOME/yard/xyz/$ID"
   RY_STALL_MIN=5 run ry-watch.sh --once
   [ "$status" -eq 0 ]
   grep -q "engine $ID silent for [0-9]*m (status running, no turn end); check window ry-$ID" "$RY_HOME/state/inbox.md"
