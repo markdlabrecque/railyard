@@ -304,6 +304,31 @@ Railyard creates `fixtures/<project>/` when it couples a siding, so a start
 script can rely on the directory existing and simply find it empty. Drop the
 files in yourself; nothing else does.
 
+## What railyard writes into a siding
+
+Two files, both gitignored, neither ever committed:
+
+- `.ddev/config.local.yaml` — the siding's own DDEV project name, for a project
+  that has `.ddev/`. See above.
+- `.claude/settings.local.json` — the engine's Stop hook, the one thing that
+  tells railyard a turn ended.
+
+The hook is also passed on the `claude` command line as `--settings`, and that
+used to be the only place it lived. It was not enough. Anything that relaunches
+the session with `--resume` — a crash recovery, a terminal app restoring its
+windows — drops every other argument with it, and the engine goes on working
+while railyard hears nothing, forever. A survey once finished a 594-line report
+that way and no one knew (#5).
+
+So the hook is registered in the siding as well, where Claude Code reads it on
+every launch regardless of how the session started. Both registrations fire on
+a normal turn; `bin/ry-engine-stop.sh` reports the turn once and ignores the
+duplicate.
+
+If the project does not already ignore `.claude/settings.local.json`, railyard
+adds it to the clone's `.git/info/exclude` rather than editing the project's
+`.gitignore`. Nothing railyard writes into a siding is the project's business.
+
 ## The worktree start script
 
 A fresh siding is a bare git worktree. For a project that needs a database or a
@@ -489,7 +514,14 @@ nothing is carried forward undecided.
 ## When something goes wrong
 
 **`engine <id> silent for Nm`** — a running engine ended no turn. Look at it:
-`bin/ry-peek.sh <id>`.
+`bin/ry-peek.sh <id>`. It is still able to report; it just has not.
+
+**`engine <id> not reporting`** — worse, and a different thing. That engine's
+siding no longer registers railyard's Stop hook, so it *cannot* report a turn
+end however long you wait. The work may well be finished. Peek at the window,
+read `data/<id>/report.md` or the siding's commits, and judge the outcome
+yourself; the engine will never tell you. Sidings cut before railyard wrote the
+hook into the siding are the usual cause.
 
 **`engine <id> waiting for input`** — the same thing, spotted at once instead
 of waited out: the backend says that engine's agent is sitting at a prompt.
