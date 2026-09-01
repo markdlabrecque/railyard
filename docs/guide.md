@@ -421,7 +421,7 @@ uncommitted changes each need your explicit word, for that specific task.
 | mode | what happens |
 | --- | --- |
 | `local-only` | `bin/ry-merge-local.sh [--push] <id>` — fast-forwards the base branch in your clone |
-| `pr` | `bin/ry-pr.sh <id>` — pushes the branch, opens the PR/MR, then the watcher polls CI and tells you when it merges or the checks fail |
+| `pr` | `bin/ry-pr.sh <id>` — pushes the branch, opens the PR/MR, then the watcher polls it until it merges and tells you when it is ready to merge (`pr-ready`, with the count and worst severity of the unresolved reviewer findings), when no check ran at all (`pr-no-checks`), when it conflicts (`pr-conflict`), when checks fail, and when it merges |
 | survey | nothing to merge; the findings are the deliverable |
 
 **Decouple.** `bin/ry-decouple.sh [--delete-branch] <id>` kills the window,

@@ -3,5 +3,9 @@ printf 'gh %s\n' "$*" >> "$RY_FAKE_FORGE_LOG"
 case "$1 $2" in
   "pr create") echo "https://github.com/o/r/pull/7" ;;
   "pr view")   cat "$RY_FAKE_GH_VIEW" ;;
+  "api graphql")
+    # Review threads for ry-pr-poll.sh. Absent fixture = a PR nobody reviewed.
+    if [ -s "${RY_FAKE_GH_THREADS:-}" ] 2>/dev/null; then cat "$RY_FAKE_GH_THREADS"
+    else echo '{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[]}}}}}'; fi ;;
   *) echo "fake gh: unhandled $*" >&2; exit 1 ;;
 esac
