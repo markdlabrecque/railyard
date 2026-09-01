@@ -420,9 +420,20 @@ if at all.
 **Wait.** The turn ends. You get on with your day. When the engine finishes,
 the watcher wakes the yardmaster with the engine's own one-line handoff.
 
-**Review.** The yardmaster reads the diff (`bin/ry-review-diff.sh <id>`) or the
-survey report, judges it against the waybill, and brings you the outcome plus
-the one decision you need to make.
+**Review.** The engine reviews its own work before it hands off: on any haul
+that touches code or tests it spawns an **inspector** — a fresh, read-only
+agent that never saw the engine's reasoning — which re-runs the suite itself
+and names one assertion that fails when the change is reverted. The engine
+fixes what the inspector raises, or rejects it in writing, and reports the lot
+in an `## Inspection` block in its handoff. Review happens where the code is.
+
+The yardmaster reads that block (`bin/ry-verdict.sh <id>`, which fails when the
+block is missing or malformed) or the survey report, judges it against the
+waybill — the one thing the inspector cannot judge, because only the yardmaster
+holds your request — and brings you the outcome plus the one decision you need
+to make. It still pulls the diff (`bin/ry-review-diff.sh --stat <id>` first) on
+a handful of named triggers and on a random sample, which is what keeps the
+inspector honest.
 
 That decision is always yours. `DONE` from an engine is a claim, not an
 approval. Merging, pushing, dropping work, and decoupling a siding with
@@ -519,7 +530,8 @@ instructions into the engine's window; it keeps its context and carries on.
 | `bin/ry-couple.sh <id>` | cut a queued task's siding by hand |
 | `bin/ry-peek.sh <id>` | recent output from an engine's terminal |
 | `bin/ry-send.sh <id> "<text>"` | send follow-up text to an engine |
-| `bin/ry-review-diff.sh <id>` | an engine's commits and diff |
+| `bin/ry-review-diff.sh [--stat] <id>` | an engine's commits and diff; `--stat` for the file list alone |
+| `bin/ry-verdict.sh <id>` | an engine's inspection block; non-zero when it is missing or malformed |
 | `bin/ry-merge-local.sh [--push] <id>` | fast-forward the base branch |
 | `bin/ry-pr.sh <id>` | open the PR/MR |
 | `bin/ry-pr-poll.sh <id>` | check an open PR once, by hand |

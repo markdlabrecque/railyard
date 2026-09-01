@@ -37,7 +37,7 @@ The SessionStart hook claimed the yard, started the watcher and printed the summ
 - order: a task that cannot start until another has landed names it as a **blocker** with `--after <id>`. It waits as `queued`, and the watcher couples it once every blocker is merged.
 Split independent asks into independent engines; chain dependent ones with `--after`.
 
-**Waybill.** Write the task for the engine: goal, acceptance criteria, constraints, files or areas to look at, what "verified" means. The preamble already covers commit/push/handoff rules; write only the task.
+**Waybill.** Write the task for the engine: goal, acceptance criteria, constraints, files or areas to look at, what "verified" means. The preamble already covers commit/push/handoff rules; write only the task. Name the suspected weakness — the assertion you expect to be soft, the edge case you expect to be missed, the file you expect to be forgotten. The engine hands that line to its inspector, and an inspector told only "review this diff" finds nothing.
 
 **Dispatch.** `bin/ry-dispatch.sh --haul|--survey [--mode <m>] [--after <id>[,<id>]] [--ticket <n>] [--slug <text>] [--prefix <token>] <project> "<waybill>"`. Tell the dispatcher one line: what was dispatched, the ticket it is against, and what it waits on.
 
@@ -50,9 +50,27 @@ A second task with the same name gets `-2`.
 **Wait.** End your turn. The watcher wakes you with `[railyard] engine <id> turn-ended: DONE|BLOCKED ...` when the engine finishes. Zero polling.
 
 **Review.** On `turn-ended`:
-- `bin/ry-review-diff.sh <id>` (hauls) or read `data/<id>/report.md` (surveys). Judge: does it meet the waybill? Tests run? Risk?
+- Read the handoff, not the diff. `bin/ry-verdict.sh <id>` prints the engine's
+  `## Inspection` block and fails when it is absent or malformed. The engine's
+  inspector already reviewed the code where the code is; what only you can
+  judge is **waybill fit** — is this the thing you asked for? For surveys, read
+  `data/<id>/report.md`.
+- Spot-check with `bin/ry-review-diff.sh` on any of these, and on roughly one
+  task in five with no trigger at all — the random one is what keeps the rest
+  honest:
+  1. no inspection block, or `inspector: not run`;
+  2. `must-fix: 0 raised` on a non-trivial diff — a clean first pass usually
+     means the inspector was steered, not that the code was perfect;
+  3. the revert-check line is missing, or names a test that does not exist
+     (`grep` the file at the named line — it costs one command);
+  4. the diff touches `bin/`, `templates/`, a hook, or prime-directive ground;
+  5. `mode: pr` — it is going public;
+  6. risk stated as anything but `low`;
+  7. the handoff describes something other than what you asked for.
+- When you do run it: **`bin/ry-review-diff.sh --stat <id>` first**, and the
+  full diff only when the file list looks wrong.
 - `DONE` but wrong or incomplete → `bin/ry-send.sh <id> "<follow-up>"`; the engine keeps its context and the watcher tracks its next turn end.
-- `BLOCKED` → the engine's question is now your decision, or the dispatcher's. Answer it yourself only if the waybill or the dispatcher's request already settles it.
+- `BLOCKED` → the engine's question is now your decision, or the dispatcher's. Answer it yourself only if the waybill or the dispatcher's request already settles it. The preamble makes the engine quote the waybill line it believes leaves the question open; if it quoted none, the waybill answered it and the round trip was avoidable — say so in the follow-up.
 
 **Deliver.** Report to the dispatcher: outcome, risk, and the one decision they need to make (merge? open PR? drop?). Then, on their word:
 - `local-only`: `bin/ry-merge-local.sh [--push] <id>`
@@ -81,6 +99,17 @@ Start-script lines (`engine <id> start-script-failed ...`) mean the project's ow
 Stall lines (`engine <id> silent for Nm`) mean a running engine ended no turn: `bin/ry-peek.sh <id>` to see why, and tell the dispatcher if it needs a human.
 
 Stranded lines (`engine <id> blocked-stranded <blocker>`) mean a queued task's blocker was decoupled without merging, so its block can never lift. Bring the dispatcher the choice: drop the task, or re-dispatch it without that blocker.
+
+## Filing tickets
+
+A ticket that needs evidence you do not already hold — code read, a command
+run, history checked — goes to a subagent to draft. It never files. You skim
+the title and the opening paragraph, then file it yourself: an issue is
+outward-facing and sits in the dispatcher's repository under their name, which
+is prime directive 2's class of act even though it is not on its list. The
+brief, the house style and what comes back are in
+`.claude/skills/file-ticket/SKILL.md`, which governs anything filed from the
+yard on either host.
 
 ## Learnings
 
