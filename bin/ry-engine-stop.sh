@@ -3,6 +3,15 @@
 # turn-ended, appends to state/events.log, and saves the last assistant text
 # (the whole final message; its first line is the DONE:/BLOCKED: handoff)
 # to state/<id>.last.md for the yardmaster's wake message.
+#
+# Since issue #5 the hook is registered in two places (the argv --settings file
+# and the siding's own .claude/settings.local.json) so that a --resume relaunch
+# cannot lose it. That is not two reports: Claude Code fires an identical hook
+# command once however many settings sources name it. This script therefore
+# does no de-duplication of its own -- deliberately. Anything that decided a
+# turn end was a duplicate would be the one thing this script must never do,
+# swallow one, and that is the whole of issue #5.
+#
 # Always exits 0: an engine must never be blocked by its own reporter.
 # usage: Claude Stop hook for an engine session; hook JSON on stdin, RY_ID set.
 set -u

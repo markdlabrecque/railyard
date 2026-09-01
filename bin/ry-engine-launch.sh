@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Launch the engine for a dispatched id in the configured backend.
 # Builds the prompt from templates/engine-preamble.md + the waybill, writes
-# state/<id>.settings.json (Claude hooks: Stop -> ry-engine-stop.sh),
-# pre-trusts the siding in ~/.claude.json (RY_CLAUDE_JSON overrides) so no
-# trust dialog blocks the engine, opens the backend window, marks running.
+# state/<id>.settings.json (Claude hooks: Stop -> ry-engine-stop.sh) and
+# merges the same hook into the siding's own .claude/settings.local.json (a
+# --resume relaunch drops --settings, so the hook must live there too --
+# issue #5), pre-trusts the siding in ~/.claude.json (RY_CLAUDE_JSON
+# overrides) so no trust dialog blocks the engine, opens the backend window,
+# marks running.
 #
 # usage: ry-engine-launch.sh <id>
 # env:   RY_BACKEND=tmux|orca|none  RY_ENGINE_CMD (default: claude --dangerously-skip-permissions)
@@ -33,7 +36,15 @@ prompt=$(awk -v id="$id" -v shape="$shape" -v branch="$branch" -v report="$repor
 ' "$bindir/../templates/engine-preamble.md")
 settings="$home/state/$id.settings.json"
 
-jq -n --arg cmd "exec $bindir/ry-engine-stop.sh" '{hooks:{Stop:[{hooks:[{type:"command",command:$cmd}]}]}}' > "$settings"
+jq -n --arg cmd "exec $(printf %q "$bindir/ry-engine-stop.sh")" '{hooks:{Stop:[{hooks:[{type:"command",command:$cmd}]}]}}' > "$settings"
+
+# Belt and braces (issue #5): --settings is lost on a --resume relaunch, so
+# the hook is also registered in the siding itself, where Claude Code reads
+# project settings regardless of how the session started.
+# Ignore first, then write: a launch interrupted between the two would
+# otherwise leave an untracked mktemp sibling in the siding.
+ry_gitignore_stop_hook "$siding"
+ry_write_stop_hook "$siding" "$bindir"
 
 engine_cmd=${RY_ENGINE_CMD:-claude --dangerously-skip-permissions}
 # Env travels through the window command so the Stop hook can find home + id.
