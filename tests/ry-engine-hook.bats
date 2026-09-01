@@ -126,12 +126,13 @@ JSON
   # `git check-ignore -q` only accepts one pathname; ry_gitignore_stop_hook
   # used to pass it two, which exits 128 and prints
   # "fatal: --quiet is only valid with a single pathname" on every dispatch
-  # (issue #27). Some backends/environments may still put benign chatter on
-  # stderr, so pin down the specific failure rather than requiring silence.
+  # (issue #27). Nothing on this path has anything to say, so the assertion is
+  # silence rather than a blocklist of words: a blocklist only catches the
+  # spellings someone thought of, and the next spurious line will be a
+  # `warning:` or a `hint:`.
   run --separate-stderr ry-dispatch.sh --haul xyz "task"
   [ "$status" -eq 0 ]
-  [[ "$stderr" != *"fatal:"* ]]
-  [[ "$stderr" != *"error:"* ]]
+  [ -z "$stderr" ]
 }
 
 @test "when both the settled path and its mktemp sibling are already ignored, nothing is written to info/exclude" {
@@ -146,13 +147,12 @@ JSON
   siding="$RY_HOME/yard/xyz/$id"
   common=$(git -C "$siding" rev-parse --git-common-dir)
   common=$(cd "$siding" && cd "$common" && pwd)
-  if [ -f "$common/info/exclude" ]; then
-    # `!` exempts the very next command from bats' errexit, so a bare
-    # `! grep ...` here would silently pass even on a match -- run it and
-    # check $status instead.
-    run grep -qxF '.claude/settings.local.json*' "$common/info/exclude"
-    [ "$status" -ne 0 ]
-  fi
+  # `!` exempts the very next command from bats' errexit, so a bare
+  # `! grep ...` here would silently pass even on a match -- run it and check
+  # $status instead. /dev/null gives grep a second file so a missing exclude
+  # file is "no match" rather than a skipped assertion.
+  run grep -qxF '.claude/settings.local.json*' "$common/info/exclude" /dev/null
+  [ "$status" -ne 0 ]
   [ -z "$(git -C "$siding" status --porcelain)" ]
 }
 
@@ -184,10 +184,8 @@ JSON
   ry-engine-launch.sh "$id"
   common=$(git -C "$siding" rev-parse --git-common-dir)
   common=$(cd "$siding" && cd "$common" && pwd)
-  if [ -f "$common/info/exclude" ]; then
-    run grep -qxF '.claude/settings.local.json*' "$common/info/exclude"
-    [ "$status" -ne 0 ]
-  fi
+  run grep -qxF '.claude/settings.local.json*' "$common/info/exclude" /dev/null
+  [ "$status" -ne 0 ]
   [ -z "$(git -C "$siding" status --porcelain)" ]
 }
 
@@ -202,10 +200,8 @@ JSON
   [ -z "$stderr" ]
   common=$(cd "$repo" && git rev-parse --git-common-dir)
   common=$(cd "$repo" && cd "$common" && pwd)
-  if [ -f "$common/info/exclude" ]; then
-    run grep -qxF '.claude/settings.local.json*' "$common/info/exclude"
-    [ "$status" -ne 0 ]
-  fi
+  run grep -qxF '.claude/settings.local.json*' "$common/info/exclude" /dev/null
+  [ "$status" -ne 0 ]
 }
 
 @test "a project rule that covers only the settled file still gets the sibling covered" {
