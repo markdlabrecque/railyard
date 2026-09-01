@@ -117,7 +117,17 @@ case $forge in
     sha=$(jq -r '.headRefOid' <<<"$json")
     if [ -n "$armed" ]; then
       [ "$armed" != "$sha" ] || { printf 'auto-merge=armed sha=%s\n' "$sha"; exit 0; }
-      (cd "$siding" && gh pr merge "$url" --disable-auto >/dev/null 2>&1) || true
+      # Only claim a disarm that actually happened: saying auto-merge is off
+      # while GitHub still has it on, for a head no check was created for, is
+      # the one lie that could merge the very commit this gate exists to hold.
+      out=$(cd "$siding" && gh pr merge "$url" --disable-auto 2>&1) && rc=0 || rc=$?
+      if [ "$rc" -ne 0 ]; then
+        case $out in
+          *"not enabled"*|*"not have auto-merge"*|*"Auto merge is not"*) ;;
+          *) notice blocked disarm-failed "$sha"
+             printf 'auto-merge=blocked reason=disarm-failed\n'; exit 0 ;;
+        esac
+      fi
       disarmed "$sha"
     fi
 

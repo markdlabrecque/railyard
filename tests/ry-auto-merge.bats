@@ -94,6 +94,33 @@ gl_api() {  # <detailed_merge_status> <head_pipeline-json-or-null>
   grep -q -- "--auto --merge --match-head-commit abc123" "$RY_FAKE_FORGE_LOG"
 }
 
+@test "a disable-auto that fails is not reported as a clean disarm" {
+  open_gh
+  echo oldsha > "$RY_HOME/state/$ID.auto-armed"
+  gh_view CLEAN '{"status":"IN_PROGRESS"}'
+  echo "HTTP 503: upstream connect error" > "$BATS_TEST_TMPDIR/gh-merge-fail"
+  export RY_FAKE_GH_MERGE_FAIL="$BATS_TEST_TMPDIR/gh-merge-fail"
+  run ry-auto-merge.sh "$ID"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"auto-merge=blocked reason=disarm-failed"* ]]
+  # Still armed as far as railyard knows, because GitHub may still have it on.
+  [ -e "$RY_HOME/state/$ID.auto-armed" ]
+  ! grep -q "auto-merge-disarmed" "$EV"
+  grep -q "auto-merge-blocked https://github.com/o/r/pull/7 reason=disarm-failed" "$EV"
+}
+
+@test "a disable-auto refused because auto-merge was never on still disarms" {
+  open_gh
+  echo oldsha > "$RY_HOME/state/$ID.auto-armed"
+  gh_view CLEAN ""
+  echo "auto-merge is not enabled for this pull request" > "$BATS_TEST_TMPDIR/gh-merge-fail"
+  export RY_FAKE_GH_MERGE_FAIL="$BATS_TEST_TMPDIR/gh-merge-fail"
+  run ry-auto-merge.sh "$ID"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"auto-merge=disarmed sha=abc123"* ]]
+  [ ! -e "$RY_HOME/state/$ID.auto-armed" ]
+}
+
 @test "github: a rollup of nothing but skipped/neutral is not a check" {
   open_gh
   gh_view CLEAN '{"status":"COMPLETED","conclusion":"SKIPPED"},{"status":"COMPLETED","conclusion":"NEUTRAL"}'
