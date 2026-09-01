@@ -68,6 +68,12 @@ pass() {
       if [ $((now - last_poll)) -ge "$pr_poll_sec" ]; then
         printf '%s\n' "$now" > "$st/$id.pr-polled"
         "$bindir/ry-pr-poll.sh" "$id" >/dev/null 2>>"$st/watch.log" || true
+        # Same cadence as the poll: ry-auto-merge.sh reads the forge and, on
+        # GitLab, sleeps while mergeability settles. At the watcher's own
+        # 2s interval that would flood the forge and stall every other task.
+        if grep -q '^auto_merge=' "$st/$id.meta"; then
+          "$bindir/ry-auto-merge.sh" "$id" >/dev/null 2>>"$st/watch.log" || true
+        fi
       fi
     fi
     [ "$status" = running ] || continue

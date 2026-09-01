@@ -111,6 +111,39 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   [ "$(grep -c "mr view" "$RY_FAKE_FORGE_LOG")" -eq 2 ]
 }
 
+@test "pr without --auto-merge writes no auto_merge= line and never calls merge" {
+  RY_FORGE=gitlab run ry-pr.sh "$ID"
+  [ "$status" -eq 0 ]
+  ! grep -q '^auto_merge=' "$RY_HOME/state/$ID.meta"
+  ! grep -q "mr merge" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "pr --auto-merge writes auto_merge=merge and never calls merge itself" {
+  RY_FORGE=gitlab run ry-pr.sh --auto-merge "$ID"
+  [ "$status" -eq 0 ]
+  grep -q '^auto_merge=merge$' "$RY_HOME/state/$ID.meta"
+  [ "$(cat "$RY_HOME/state/$ID.status")" = "pr-open" ]
+  ! grep -q "mr merge" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "pr --auto-merge-method squash writes auto_merge=squash" {
+  RY_FORGE=github run ry-pr.sh --auto-merge --auto-merge-method squash "$ID"
+  [ "$status" -eq 0 ]
+  grep -q '^auto_merge=squash$' "$RY_HOME/state/$ID.meta"
+  ! grep -q "pr merge" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "pr --auto-merge-method without --auto-merge is an error" {
+  RY_FORGE=gitlab run ry-pr.sh --auto-merge-method squash "$ID"
+  [ "$status" -ne 0 ]
+}
+
+@test "pr --auto-merge-method as the trailing argument with no value is an error, not a crash" {
+  RY_FORGE=gitlab run ry-pr.sh --auto-merge --auto-merge-method
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"needs a value"* ]]
+}
+
 @test "watch turns failing checks into one inbox line with the url" {
   RY_FORGE=gitlab ry-pr.sh "$ID" >/dev/null
   echo '{"state":"opened","head_pipeline":{"status":"failed"}}' > "$RY_FAKE_GLAB_VIEW"

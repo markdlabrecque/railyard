@@ -433,8 +433,30 @@ uncommitted changes each need your explicit word, for that specific task.
 | mode | what happens |
 | --- | --- |
 | `local-only` | `bin/ry-merge-local.sh [--push] <id>` — fast-forwards the base branch in your clone |
-| `pr` | `bin/ry-pr.sh <id>` — pushes the branch, opens the PR/MR, then the watcher polls it until it merges and tells you when it is ready to merge (`pr-ready`, with the count and worst severity of the unresolved reviewer findings), when no check ran at all (`pr-no-checks`), when it conflicts (`pr-conflict`), when checks fail, and when it merges |
+| `pr` | `bin/ry-pr.sh [--auto-merge] <id>` — pushes the branch, opens the PR/MR, then the watcher polls it until it merges and tells you when it is ready to merge (`pr-ready`, with the count and worst severity of the unresolved reviewer findings), when no check ran at all (`pr-no-checks`), when it conflicts (`pr-conflict`), when checks fail, and when it merges |
 | survey | nothing to merge; the findings are the deliverable |
+
+`--auto-merge` (default method `merge`; `--auto-merge-method squash|rebase` to
+change it) opts a `pr` task in to arming the forge's own auto-merge once it is
+safe, instead of you merging it by hand. `ry-pr.sh` only records the choice —
+it never arms anything itself, because a check usually does not exist for
+seconds to minutes after the push. The watcher then runs `bin/ry-auto-merge.sh
+<id>` on the same cadence as the PR poll: it reads the forge's own view of the
+PR head and refuses to arm until at least one check that can actually report a
+verdict has been created for that exact commit — a rollup of nothing but
+`skipped` or `neutral` is not a check, and neither is a pipeline for an older
+sha. That gate exists because GitHub and GitLab auto-merge both fire against
+"nothing pending", not "checks passed" — arming the instant a PR opens, before
+CI or a review bot has even started, would merge it unreviewed.
+
+Arming writes the gated sha to `state/<id>.auto-armed`. The watcher keeps
+looking after that, because GitHub leaves auto-merge enabled across a later
+push: if the head moves off the armed sha, railyard disables auto-merge again
+and re-gates the new commit from scratch (`auto-merge-disarmed`). Every
+non-arming outcome — `auto-merge-waiting`, `auto-merge-blocked` — is reported
+once per situation, not once per poll. The merge itself is still observed and
+reported the normal way, through `pr-merged`, which is what couples anything
+queued behind the task.
 
 **Decouple.** `bin/ry-decouple.sh [--delete-branch] <id>` kills the window,
 removes the siding, and archives the state.
@@ -521,8 +543,9 @@ instructions into the engine's window; it keeps its context and carries on.
 | `bin/ry-send.sh <id> "<text>"` | send follow-up text to an engine |
 | `bin/ry-review-diff.sh <id>` | an engine's commits and diff |
 | `bin/ry-merge-local.sh [--push] <id>` | fast-forward the base branch |
-| `bin/ry-pr.sh <id>` | open the PR/MR |
+| `bin/ry-pr.sh [--auto-merge] <id>` | open the PR/MR |
 | `bin/ry-pr-poll.sh <id>` | check an open PR once, by hand |
+| `bin/ry-auto-merge.sh <id>` | arm auto-merge once a check exists for the head commit, by hand |
 | `bin/ry-decouple.sh [--force] [--delete-branch] <id>` | remove the siding, archive the state |
 | `bin/ry-claim.sh [--held\|--json\|--release\|--take] [--force]` | look at, test, drop or take the yard claim |
 

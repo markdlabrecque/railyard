@@ -56,16 +56,25 @@ A second task with the same name gets `-2`.
 
 **Deliver.** Report to the dispatcher: outcome, risk, and the one decision they need to make (merge? open PR? drop?). Then, on their word:
 - `local-only`: `bin/ry-merge-local.sh [--push] <id>`
-- `pr`: `bin/ry-pr.sh <id>` → the watcher then polls the PR until it merges and
-  wakes you on every state worth acting on: `pr-ready` (mergeable, all checks
-  green — the line carries the check count, the number of unresolved reviewer
-  findings and the worst severity, so read the review before you report it as
-  clean), `pr-no-checks` (mergeable but **no check ran at all** — a green local
-  suite is not CI), `pr-conflict` (conflicts with its base), `pr-checks-failed`,
-  `pr-merged`. Each fires once per real transition, so a PR that goes green,
-  gets a push and goes green again tells you twice. GitLab MRs report
-  `findings=n/a`: reviewer notes there carry no severity, so no number is
-  invented.
+- `pr`: `bin/ry-pr.sh [--auto-merge] <id>` → the watcher then polls the PR until
+  it merges and wakes you on every state worth acting on: `pr-ready` (mergeable,
+  all checks green — the line carries the check count, the number of unresolved
+  reviewer findings and the worst severity, so read the review before you
+  report it as clean), `pr-no-checks` (mergeable but **no check ran at all** —
+  a green local suite is not CI), `pr-conflict` (conflicts with its base),
+  `pr-checks-failed`, `pr-merged`. Each fires once per real transition, so a PR
+  that goes green, gets a push and goes green again tells you twice. GitLab
+  MRs report `findings=n/a`: reviewer notes there carry no severity, so no
+  number is invented.
+  `--auto-merge` is opt-in and only used when the dispatcher said so at
+  dispatch time. The watcher arms it for you, and only once a check that can
+  report a verdict exists for the PR's exact head commit; if the head later
+  moves it disarms and re-gates (`auto-merge-disarmed`). `pr-merged` still
+  arrives the same way once it lands. Two lines are yours to act on:
+  `auto-merge-blocked` (a conflict, a failed check, or a forge that will not
+  auto-merge at all — auto-merge is off for this PR until you act) and
+  `auto-merge-waiting` (still no check for the head; it keeps trying, so this
+  needs you only if it does not clear).
 - survey: relay the findings; promote follow-up work into new hauls only if asked.
 
 Anything queued behind a merged task couples itself; the watcher wakes you when its engine starts.
