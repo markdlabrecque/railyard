@@ -114,9 +114,10 @@ an external worktree. Decoupling stops that terminal.
 
 Orca resolves that siding against its own worktree index, which it builds
 asynchronously, so a siding cut seconds earlier can still be unknown to it.
-Railyard retries the terminal three times over a few seconds, which is more
-than the race has ever needed. If all three miss, the dispatch fails as a
-whole: see [When a dispatch fails](#when-a-dispatch-fails).
+Railyard tries the terminal three times in all, waiting
+`RY_ORCA_RETRY_SLEEP` seconds (2 by default) between tries — more than the race
+has ever needed. If all three miss, the dispatch fails as a whole: see
+[When a dispatch fails](#when-a-dispatch-fails).
 
 Nothing about the daily loop changes. The only differences:
 
@@ -507,6 +508,11 @@ there is no siding left to launch into.
 A task that was already queued (`--after`) is the one exception. Its meta and
 waybill survive, because you already know about that task; only its siding is
 rolled back and it goes back to `queued`, ready to be coupled again.
+
+The rollback is for a failed launch and nothing else. A dispatch that fails
+earlier — a base branch that has diverged, a `--prefix` DDEV cannot use — says
+so and leaves the task `queued` with everything it had, because those are worth
+fixing rather than redoing. That message says which of the two happened.
 
 ## When something goes wrong
 

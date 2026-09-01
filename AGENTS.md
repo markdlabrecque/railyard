@@ -43,7 +43,7 @@ Split independent asks into independent engines; chain dependent ones with `--af
 
 A dispatch is all-or-nothing. If the engine's terminal cannot be opened —
 Orca's worktree index lagging behind a fresh siding is the case that happens —
-railyard retries it three times, then rolls the whole dispatch back: siding
+railyard tries three times in all, then rolls the whole dispatch back: siding
 removed, branch deleted, state files gone. There is nothing to repair and
 nothing to relaunch; dispatch the task again. A task that was already queued
 with `--after` keeps its meta and waybill and returns to `queued`, so couple it

@@ -237,3 +237,21 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; . "$BATS_TEST_DIRNAME/../bin/ry
   [ -f "$RY_HOME/state/$b.launch-failed" ]
   [ "$(grep -c -- 'terminal create' "$RY_FAKE_ORCA_LOG")" -gt "$creates_1" ]
 }
+
+# The other half of the sentinel's life: a couple that succeeds must leave
+# none behind, or the next queued task it names would never be auto-coupled.
+@test "couple: a successful retry clears the launch-failed sentinel" {
+  a=$(ry-dispatch.sh --haul xyz "a" | sed -n 's/^id=//p')
+  b=$(ry-dispatch.sh --haul --after "$a" xyz "b" | sed -n 's/^id=//p')
+
+  RY_FAKE_ORCA_CREATE_FAILS=99 run ry-couple.sh "$b"
+  [ "$status" -ne 0 ]
+  [ -f "$RY_HOME/state/$b.launch-failed" ]
+
+  # the backend comes back: the deliberate retry couples for real
+  rm -f "$RY_FAKE_ORCA_CREATE_COUNTER"
+  run ry-couple.sh "$b"
+  [ "$status" -eq 0 ]
+  [ ! -f "$RY_HOME/state/$b.launch-failed" ]
+  [ "$(cat "$RY_HOME/state/$b.status")" = "running" ]
+}
