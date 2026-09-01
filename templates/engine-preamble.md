@@ -46,7 +46,7 @@ On a haul, the handoff then carries this block, verbatim in shape — the
 yardmaster reads it instead of your diff, and `bin/ry-verdict.sh <id>` parses
 it, so a missing or malformed field is a failure, not a style note:
 
-```
+```text
 ## Inspection
 - inspector: ran | not run (<reason>)
 - suite: <command> — <N> passed, <M> failed

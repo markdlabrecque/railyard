@@ -158,3 +158,44 @@ EOF
   [ "$status" -eq 3 ]
   [[ "$output" == *"risk"* ]]
 }
+
+@test "a suite line with no counts says nothing and is rejected" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  well_formed_block | sed 's/^- suite:.*/- suite: not run/' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"suite"* ]]
+}
+
+@test "a must-fix line with no counts is rejected" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  well_formed_block | sed 's/^- must-fix:.*/- must-fix: all clean/' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"must-fix"* ]]
+}
+
+@test "a revert check naming no file and line is rejected" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  well_formed_block | sed 's/^- revert check:.*/- revert check: skipped/' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"revert check"* ]]
+}
+
+@test "a revert check of not applicable with a reason is accepted" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  well_formed_block | sed 's|^- revert check:.*|- revert check: not applicable — the change is a generated file with no assertion of its own|' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not applicable"* ]]
+}
+
+@test "a bare not applicable with no reason is rejected" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  well_formed_block | sed 's/^- revert check:.*/- revert check: not applicable/' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"revert check"* ]]
+}
+
