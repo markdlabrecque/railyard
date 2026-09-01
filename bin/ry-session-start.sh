@@ -69,6 +69,12 @@ unread=0; [ -s "$st/inbox.md" ] && unread=$(grep -c . "$st/inbox.md")
 # in the summary for the same reason unread inbox lines are.
 learnings=0
 [ -f "$home/data/learnings.md" ] && learnings=$(grep -c '^- ' "$home/data/learnings.md" || true)
+# state/open-decisions.md mirrors data/learnings.md but for live-state items
+# awaiting the dispatcher's word: unanswered decisions, undispatched asks, and
+# review judgments a fresh session would otherwise have to re-derive. Same
+# queue discipline, same reason to flag it in the summary.
+decisions=0
+[ -f "$st/open-decisions.md" ] && decisions=$(grep -c '^- ' "$st/open-decisions.md" || true)
 # A fresh clone has neither data/yard.md nor data/projects.md: both are
 # machine-local and gitignored, so they do not travel with the repo. The
 # readers fall back (tmux, no projects) and would say nothing, which is the
@@ -86,5 +92,8 @@ printf 'railyard: %s %d engine(s) running, %d turn-ended, %d unread inbox line(s
   "$standing" "$running" "$ended" "$unread" "$firstrun"
 if [ "$learnings" -gt 0 ]; then
   printf ' %d unfiled learning(s) in data/learnings.md: promote or drop each one (AGENTS.md § Learnings).' "$learnings"
+fi
+if [ "$decisions" -gt 0 ]; then
+  printf ' %d open decision(s) in state/open-decisions.md: bring them to the dispatcher (AGENTS.md § Learnings).' "$decisions"
 fi
 printf '\n'
