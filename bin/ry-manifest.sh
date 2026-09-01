@@ -37,7 +37,13 @@ for status in queued running turn-ended pr-open merged dispatched; do
         state=pending*)  line+=$'\n'"      waiting on ${deps#state=pending pending=}" ;;
       esac
     fi
-    [ -f "$st/$id.last.md" ] && line+=$'\n'"      $(head -n1 "$st/$id.last.md")"
+    if [ -f "$st/$id.last.md" ]; then
+      line+=$'\n'"      $(head -n1 "$st/$id.last.md")"
+      # Surface the risk line too, so a finished task worth a look stands out
+      # on the board without opening its handoff.
+      risk_line=$(sed -n 's/^- risk:.*/&/p' "$st/$id.last.md" | head -n 1)
+      [ -n "$risk_line" ] && line+=$'\n'"      $risk_line"
+    fi
     rows+="$line"$'\n'; n=$((n+1))
   done
   [ -n "$rows" ] && printf '%s\n%s' "$(tr '[:lower:]' '[:upper:]' <<<"$status")" "$rows"
