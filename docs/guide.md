@@ -76,8 +76,10 @@ tmux is the default; Orca, cmux and herdr are the other supported
 
 `data/yard.md` is yours alone: it is gitignored, it is not in the repo, and it
 does not arrive with a clone — create it yourself on each machine you run a
-yard on. It holds live yard state, and a tracked file gets reverted by any
-branch switch or reset; that happened here, silently, with an engine running.
+yard on. It holds live yard state, and tracking it puts that state at the
+mercy of git: any operation that updates the file's path — a checkout, a
+merge, a hard reset — can put an older copy back. That happened here,
+silently, with an engine running.
 
 `bin/ry-yard.sh` then opens the yard there, and carries the choice into the
 yardmaster, so every engine it dispatches lands in the same app. `RY_BACKEND`
@@ -262,13 +264,14 @@ git clone <url> projects/<name>
 
 Then add a line to `data/projects.md`, creating the file if it is not there:
 
-```
+```text
 - `myapp` — pr, base: develop, notes: main repo
 ```
 
 Like `data/yard.md`, `data/projects.md` is machine-local: gitignored, not in
 the repo, and absent from a fresh clone. It holds live yard state, and a
-tracked file gets reverted by any branch switch or reset. It also lists the
+tracked file can be put back to an older copy by any git operation that
+updates its path — a checkout, a merge, a hard reset. It also lists the
 clones under `projects/`, which are this machine's — another machine's yard
 registers its own.
 
