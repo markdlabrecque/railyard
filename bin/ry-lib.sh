@@ -214,13 +214,25 @@ ry_gitignore_stop_hook() {  # <siding>: keep the siding clean, before ry_write_s
   # pattern is a natural one to keep for Claude Code work), but the decision
   # of whether *this project* already ignores the file must not depend on the
   # operator's machine, or another engine on another host would go dirty.
-  local siding=$1 common
+  local siding=$1 common path rc covered=1
   # Both paths, not just the settled one: a project that ignores exactly
   # `.claude/settings.local.json` still leaves an interrupted mktemp sibling
   # untracked, and one untracked file is all it takes for ry-pr.sh to refuse
   # the PR. Nothing is written until the sibling is covered too.
-  git -C "$siding" -c core.excludesfile=/dev/null check-ignore -q -- \
-    "$RY_STOP_HOOK_FILE" "$RY_STOP_HOOK_FILE.XXXXXX" && return 0
+  #
+  # One path per call: `check-ignore -q` answers for exactly one pathname and
+  # refuses two outright -- `fatal: --quiet is only valid with a single
+  # pathname`, exit 128, printed on every dispatch and never equal to 0, so
+  # asking for both at once both shouted and made this early return dead
+  # code (issue #27). Its exit codes are 0 ignored, 1 not ignored, anything
+  # else an error: only 0 counts as covered, so an error falls through to the
+  # exclude line rather than being read as "already handled".
+  for path in "$RY_STOP_HOOK_FILE" "$RY_STOP_HOOK_FILE.XXXXXX"; do
+    rc=0
+    git -C "$siding" -c core.excludesfile=/dev/null check-ignore -q -- "$path" || rc=$?
+    [ "$rc" -eq 0 ] || { covered=0; break; }
+  done
+  [ "$covered" -eq 1 ] && return 0
   # --git-common-dir is absolute for a linked worktree and relative for an
   # ordinary checkout, so resolve it against the siding rather than $PWD.
   common=$(cd "$siding" && cd "$(git rev-parse --git-common-dir)" && pwd)
