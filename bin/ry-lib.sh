@@ -86,12 +86,14 @@ RY_TITLE_MAX=80         # characters; the reader's limit, not the API's
 RY_TITLE_HARD_MAX=255   # GitLab's API maximum (GitHub allows 256)
 
 ry_first_line() {  # <text> -> its first line, trailing whitespace trimmed
-  # No pipe on purpose: `printf | head` under `set -o pipefail` takes SIGPIPE
-  # on a long enough argument and aborts the caller with exit 141 and no
-  # message at all. Pure parameter expansion cannot.
+  # `head` is gone on purpose. It exits as soon as it has its line, so under
+  # `set -o pipefail` printf takes SIGPIPE on a long enough argument and the
+  # caller dies with exit 141 and no message; parameter expansion cuts the
+  # first line with no pipe at all. sed keeps the trailing-whitespace strip
+  # because it reads to EOF (no SIGPIPE) and is linear -- a bash glob strip
+  # here is quadratic, and pathological on a line of nothing but spaces.
   local t=${1%%$'\n'*}
-  while [ -n "$t" ] && [[ ${t: -1} == [[:space:]] ]]; do t=${t%?}; done
-  printf '%s\n' "$t"
+  printf '%s\n' "$t" | LC_ALL=C sed -e 's/[[:space:]]*$//'
 }
 
 ry_title_clamp() {  # <text> -> its first line, never over RY_TITLE_HARD_MAX
