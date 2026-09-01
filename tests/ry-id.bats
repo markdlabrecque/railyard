@@ -154,3 +154,18 @@ dispatch_id() { ry-dispatch.sh "$@" | sed -n 's/^id=//p'; }
   [[ "$output" == *"  $n  xyz"* ]]
   [[ "$output" != *"#  $n"* ]]
 }
+
+# --- the naming rule ---------------------------------------------------------
+
+# A convention that lives only in a ticket is a hope. These two files are where
+# it binds: the yardmaster reads AGENTS.md, and every engine is handed the
+# preamble.
+@test "the #ticket / !change rule is stated where it binds" {
+  for f in "$BATS_TEST_DIRNAME/../AGENTS.md" \
+           "$BATS_TEST_DIRNAME/../templates/engine-preamble.md"; do
+    grep -q '`#N`' "$f" || { echo "$f does not define #N"; false; }
+    grep -q '`!N`' "$f" || { echo "$f does not define !N"; false; }
+    grep -qi 'commit hash' "$f" || { echo "$f does not ban leading with a hash"; false; }
+    grep -qi 'carve-out' "$f" || { echo "$f is missing the GitHub carve-out"; false; }
+  done
+}

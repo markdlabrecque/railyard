@@ -33,13 +33,19 @@ The SessionStart hook claimed the yard, started the watcher and printed the summ
 - project: must exist under `projects/`;
 - mode (hauls only): `local-only` (default) or `pr`. Use the project's registered mode from `data/projects.md` when it has one.
 - base branch: resolved automatically (see `data/projects.md`); pass `--base <branch>` only when the dispatcher names one for this task.
-- DDEV prefix (projects with `.ddev/` only): `--prefix <token>` — one word or a ticket number naming the siding's own DDEV project (`<prefix>-<project>`), so two sidings of one project can both run `ddev`. Omit it and the task id's random suffix is used; nothing else needs doing.
+- DDEV prefix (projects with `.ddev/` only): `--prefix <token>` — one word or a ticket number naming the siding's own DDEV project (`<prefix>-<project>`), so two sidings of one project can both run `ddev`. Omit it and the task id is used; nothing else needs doing.
 - order: a task that cannot start until another has landed names it as a **blocker** with `--after <id>`. It waits as `queued`, and the watcher couples it once every blocker is merged.
 Split independent asks into independent engines; chain dependent ones with `--after`.
 
 **Waybill.** Write the task for the engine: goal, acceptance criteria, constraints, files or areas to look at, what "verified" means. The preamble already covers commit/push/handoff rules; write only the task.
 
-**Dispatch.** `bin/ry-dispatch.sh --haul|--survey [--mode <m>] [--after <id>[,<id>]] [--prefix <token>] <project> "<waybill>"`. Tell the dispatcher one line: what was dispatched, the id, and what it waits on.
+**Dispatch.** `bin/ry-dispatch.sh --haul|--survey [--mode <m>] [--after <id>[,<id>]] [--ticket <n>] [--slug <text>] [--prefix <token>] <project> "<waybill>"`. Tell the dispatcher one line: what was dispatched, the ticket it is against, and what it waits on.
+
+The id is the name of the work: `--ticket 3 --slug "fixtures start script"`
+gives `3-fixtures-start-script`, and without a ticket the slug stands alone,
+`news-filter-styling`. Pass both when you know them; left off, they are read
+off the waybill's first line, which is rarely the name you would have chosen.
+A second task with the same name gets `-2`.
 
 **Wait.** End your turn. The watcher wakes you with `[railyard] engine <id> turn-ended: DONE|BLOCKED ...` when the engine finishes. Zero polling.
 
@@ -104,3 +110,13 @@ Check with `git rev-list --parents -n1 HEAD` (two parents) or `git log
 ## Reporting style
 
 One dispatcher-facing message per outcome. Lead with the decision needed, if any. Include PR/MR URLs in full. Batch several engines' outcomes into one message when they land together.
+
+Name work the way the dispatcher tracks it. A ticket is `#N` — GitHub issue,
+GitLab issue, either way. A pull request or merge request is `!N`, on both
+hosts. Never lead with a commit hash, a branch name, a siding path or a task
+id: those are railyard's bookkeeping. They go below the outcome, and only when
+the dispatcher would act on them.
+
+The one carve-out is text posted into GitHub itself — a PR body, an issue
+comment — where a pull request is `#N` so the autolink works. There the
+audience is the host, not the dispatcher.
