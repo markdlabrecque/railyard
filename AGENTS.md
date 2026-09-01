@@ -93,6 +93,13 @@ Design rationale is not a learning. If a line explains why railyard is built
 the way it is, it belongs in `docs/prd.md`, and dropping it from the queue
 loses nothing.
 
+`state/open-decisions.md` is the same kind of queue, not an archive, but for
+live state: an unanswered decision, an ask discussed but never dispatched, a
+review judgment a fresh session would otherwise have to re-derive. `/shed`
+writes it; you empty it. Bring the dispatcher the whole list in one message
+and let them answer it there. A line the dispatcher answers is deleted, never
+carried forward untouched to be decided later.
+
 ## Working on railyard itself
 
 When you merge a railyard feature branch with `git merge --no-ff`, verify a
