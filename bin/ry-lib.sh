@@ -213,6 +213,11 @@ ry_gitignore_stop_hook() {  # <siding>: keep the siding clean after ry_write_sto
   # --git-common-dir is absolute for a linked worktree and relative for an
   # ordinary checkout, so resolve it against the siding rather than $PWD.
   common=$(cd "$siding" && cd "$(git rev-parse --git-common-dir)" && pwd)
+  # `cd ""` is a silent no-op, so a rev-parse that printed nothing would leave
+  # common as the siding itself and write an untracked info/ into the working
+  # tree -- the one untracked file that later makes ry-pr.sh refuse the PR.
+  [ -n "$common" ] && [ "$common" != "$siding" ] || ry_die \
+    "cannot find the git dir behind $siding, so railyard cannot keep its Stop hook out of the project's way. The siding's git metadata is broken; decouple it and couple again."
   mkdir -p "$common/info"
   grep -qxF "$RY_STOP_HOOK_IGNORE" "$common/info/exclude" 2>/dev/null && return 0
   printf '%s\n' "$RY_STOP_HOOK_IGNORE" >> "$common/info/exclude"

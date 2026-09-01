@@ -326,8 +326,10 @@ one report: Claude Code fires an identical hook command once however many
 settings sources name it.
 
 If the project does not already ignore `.claude/settings.local.json`, railyard
-adds it to the clone's `.git/info/exclude` rather than editing the project's
-`.gitignore`. Nothing railyard writes into a siding is the project's business.
+adds `.claude/settings.local.json*` to the clone's `.git/info/exclude` rather
+than editing the project's `.gitignore` — the trailing `*` so that a launch
+killed mid-write leaves no stray temp file behind to dirty the siding. Nothing
+railyard writes into a siding is the project's business.
 
 ## The worktree start script
 

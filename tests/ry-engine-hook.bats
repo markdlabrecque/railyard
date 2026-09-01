@@ -125,7 +125,7 @@ JSON
 # no de-duplication of its own. These guard that: whatever a future change
 # thinks it knows about duplicates, a real turn end always gets reported.
 
-@test "two turns under different session ids both report" {
+@test "a second invocation under a new session id still reports" {
   id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
   wait_for_log
   RY_ID=$id ry-engine-stop.sh <<<"{\"session_id\":\"s1\",\"transcript_path\":\"$T\",\"stop_hook_active\":false}"
@@ -133,7 +133,7 @@ JSON
   [ "$(grep -c " $id turn-ended$" "$RY_HOME/state/events.log")" -eq 2 ]
 }
 
-@test "two turns under one session id both report" {
+@test "a second invocation on a grown transcript still reports" {
   id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
   wait_for_log
   tp="$BATS_TEST_TMPDIR/t.jsonl"
@@ -144,7 +144,7 @@ JSON
   [ "$(grep -c " $id turn-ended$" "$RY_HOME/state/events.log")" -eq 2 ]
 }
 
-@test "a hook JSON with no session id still reports, every time" {
+@test "a second identical invocation with no session id still reports" {
   id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
   wait_for_log
   RY_ID=$id ry-engine-stop.sh <<<"{\"transcript_path\":\"$T\",\"stop_hook_active\":false}"
@@ -152,7 +152,7 @@ JSON
   [ "$(grep -c " $id turn-ended$" "$RY_HOME/state/events.log")" -eq 2 ]
 }
 
-@test "an unreadable transcript still reports, every time" {
+@test "a second identical invocation with an unreadable transcript still reports" {
   id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
   wait_for_log
   RY_ID=$id ry-engine-stop.sh <<<"{\"session_id\":\"s1\",\"transcript_path\":\"/no/such/file.jsonl\",\"stop_hook_active\":false}"

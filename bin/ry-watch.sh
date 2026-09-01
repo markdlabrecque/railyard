@@ -84,10 +84,11 @@ pass() {
       # (issue #5) and needs a distinct line so the yardmaster knows to peek.
       # ry_meta_get dies on a missing meta, and pass() is not a subshell: an
       # unreadable meta would take the whole daemon down, which is the silent
-      # and total failure #5 is about. An engine with no siding to read is
-      # reported as silent, the older and weaker claim of the two.
+      # and total failure #5 is about. An engine whose siding cannot be read at
+      # all -- no meta, or the directory gone -- is reported as silent, the
+      # older and weaker of the two claims: never accuse a siding unread.
       siding=$(ry_meta_get "$id" siding 2>/dev/null || true)
-      if [ -z "$siding" ] || ry_stop_hook_registered "$siding"; then
+      if [ -z "$siding" ] || [ ! -d "$siding" ] || ry_stop_hook_registered "$siding"; then
         post "[railyard] engine $id silent for ${age}m (status running, no turn end); check window ry-$id"
       else
         post "[railyard] engine $id not reporting for ${age}m: its siding ($siding) registers no Stop hook, so no turn end can ever arrive (issue #5); peek at window ry-$id -- the work may already be done"
