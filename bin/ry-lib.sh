@@ -73,6 +73,30 @@ ry_ticket_ref() {  # <text> -> the first #N in its first line, without the #
   printf '%s\n' "$1" | head -n 1 | grep -o '#[0-9][0-9]*' | head -n 1 | tr -d '#' || true
 }
 
+# --- the waybill's title line ----------------------------------------------
+# A waybill's first line is a title, not prose: a short imperative summary of
+# the whole task, blank line 2, body from line 3. bin/ry-pr.sh uses that line
+# verbatim as the PR/MR title, so nothing downstream has to guess one from the
+# commits. RY_TITLE_MAX is checked at dispatch, the one moment a bad first line
+# is cheap to fix; RY_TITLE_HARD_MAX is the forge's own limit and only ever a
+# backstop, so a waybill written before the contract degrades to an ugly title
+# instead of a 400 after the branch is already pushed.
+# shellcheck disable=SC2034  # read by bin/ry-dispatch.sh, which sources this
+RY_TITLE_MAX=80         # characters; the reader's limit, not the API's
+RY_TITLE_HARD_MAX=255   # GitLab's API maximum (GitHub allows 256)
+
+ry_first_line() {  # <text> -> its first line, trailing whitespace trimmed
+  printf '%s\n' "$1" | head -n 1 | LC_ALL=C sed -e 's/[[:space:]]*$//'
+}
+
+ry_title_clamp() {  # <text> -> its first line, never over RY_TITLE_HARD_MAX
+  local t; t=$(ry_first_line "$1")
+  if [ ${#t} -gt $RY_TITLE_HARD_MAX ]; then
+    t="${t:0:$((RY_TITLE_HARD_MAX - 3))}..."
+  fi
+  printf '%s\n' "$t"
+}
+
 ry_id_taken() {  # <id>: is anything already using this id, live or archived
   # Every place an id leaves a mark: live state, the archive a decoupled task
   # keeps, and the sidings themselves. Checked under set -e, so no bare

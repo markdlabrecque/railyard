@@ -27,7 +27,7 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   git -C "$PDIR" fetch -q; git -C "$PDIR" rev-parse --verify -q "origin/ry/$ID" >/dev/null
   grep -q -- "--source-branch ry/$ID" "$RY_FAKE_FORGE_LOG"
   grep -q -- "--target-branch main" "$RY_FAKE_FORGE_LOG"
-  grep -q -- "--title add dark mode css" "$RY_FAKE_FORGE_LOG"
+  grep -q -- "--title add dark mode" "$RY_FAKE_FORGE_LOG"
   grep -q '^pr_url=https://gitlab.example.com/grp/sub/r/-/merge_requests/12$' "$RY_HOME/state/$ID.meta"
   grep -q '^forge=gitlab$' "$RY_HOME/state/$ID.meta"
   [ "$(cat "$RY_HOME/state/$ID.status")" = "pr-open" ]
@@ -151,4 +151,78 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   grep -q "engine $ID pr-checks-failed: https://gitlab.example.com/grp/sub/r/-/merge_requests/12" "$RY_HOME/state/inbox.md"
   RY_PR_POLL_SEC=0 ry-watch.sh --once
   [ "$(grep -c "pr-checks-failed" "$RY_HOME/state/inbox.md")" -eq 1 ]
+}
+
+# --- the title comes from the waybill, never from a guess -------------------
+
+@test "pr title is the waybill's first line verbatim, on a multi-commit task" {
+  # A conforming waybill: title on line 1, blank line 2, body from line 3.
+  printf '%s\n\n%s\n' "Add a dark mode toggle to the settings page" \
+    "Body prose the title must not be built from." > "$RY_HOME/state/$ID.waybill.md"
+  echo y > "$SIDING/dark2.css"; git -C "$SIDING" add -A
+  git -C "$SIDING" commit -qm "fix: inspector round, tighten the toggle guard"
+  [ "$(git -C "$SIDING" rev-list --count "origin/main..HEAD" --)" -gt 1 ]
+  RY_FORGE=gitlab run ry-pr.sh "$ID"
+  [ "$status" -eq 0 ]
+  grep -q -- "--title Add a dark mode toggle to the settings page --description" "$RY_FAKE_FORGE_LOG"
+  # and not the newest commit subject, which describes an inspector fix
+  ! grep -q -- "--title fix: inspector" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "pr on a single-commit task also uses the waybill title, not the commit subject" {
+  # Deliberate: the title no longer depends on how many commits an engine made.
+  printf '%s\n' "Ship the dark mode toggle" > "$RY_HOME/state/$ID.waybill.md"
+  [ "$(git -C "$SIDING" rev-list --count "origin/main..HEAD" --)" -eq 1 ]
+  RY_FORGE=github run ry-pr.sh "$ID"
+  [ "$status" -eq 0 ]
+  grep -q -- "--title Ship the dark mode toggle --body" "$RY_FAKE_FORGE_LOG"
+  ! grep -q -- "--title add dark mode css" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "an over-long first line is clamped and the PR still opens, on both forges" {
+  # A waybill written before the title contract: 300 characters of prose.
+  long=$(printf 'x%.0s' $(seq 1 300))
+  [ "${#long}" -eq 300 ]
+  printf '%s\n' "$long" > "$RY_HOME/state/$ID.waybill.md"
+  RY_FORGE=gitlab run ry-pr.sh "$ID"
+  [ "$status" -eq 0 ]
+  # The forge call was made -- a length check alone can pass while no PR opens.
+  grep -q -- "glab mr create" "$RY_FAKE_FORGE_LOG"
+  grep -q '^pr_url=https://gitlab.example.com/grp/sub/r/-/merge_requests/12$' "$RY_HOME/state/$ID.meta"
+  [ "$(cat "$RY_HOME/state/$ID.status")" = "pr-open" ]
+  t=$(sed -n 's/.*--title \(.*\) --description.*/\1/p' "$RY_FAKE_FORGE_LOG")
+  [ -n "$t" ]
+  [ "${#t}" -le 255 ]
+  [ "${#t}" -gt 200 ]           # clamped, not emptied
+  [[ "$t" == *"..." ]]          # and marked as cut, not silently truncated
+  # Same on GitHub, whose limit is 256: no ry-pr.sh path emits more than 255.
+  G=$(ry-dispatch.sh --haul --mode pr xyz "second task" | sed -n 's/^id=//p')
+  GS="$RY_HOME/yard/xyz/$G"
+  git -C "$GS" config user.email e@e; git -C "$GS" config user.name e
+  echo z > "$GS/z.css"; git -C "$GS" add -A; git -C "$GS" commit -qm "z"
+  printf '%s\n' "$long" > "$RY_HOME/state/$G.waybill.md"
+  : > "$RY_FAKE_FORGE_LOG"
+  RY_FORGE=github run ry-pr.sh "$G"
+  [ "$status" -eq 0 ]
+  grep -q -- "gh pr create" "$RY_FAKE_FORGE_LOG"
+  t=$(sed -n 's/.*--title \(.*\) --body.*/\1/p' "$RY_FAKE_FORGE_LOG")
+  [ "${#t}" -le 255 ]
+}
+
+@test "--title still wins over the waybill, and is itself clamped" {
+  printf '%s\n' "Add a dark mode toggle" > "$RY_HOME/state/$ID.waybill.md"
+  RY_FORGE=gitlab run ry-pr.sh --title "Hand-written title" "$ID"
+  [ "$status" -eq 0 ]
+  grep -q -- "--title Hand-written title --description" "$RY_FAKE_FORGE_LOG"
+  ! grep -q -- "--title Add a dark mode toggle" "$RY_FAKE_FORGE_LOG"
+
+  G=$(ry-dispatch.sh --haul --mode pr xyz "third task" | sed -n 's/^id=//p')
+  GS="$RY_HOME/yard/xyz/$G"
+  git -C "$GS" config user.email e@e; git -C "$GS" config user.name e
+  echo z > "$GS/z.css"; git -C "$GS" add -A; git -C "$GS" commit -qm "z"
+  : > "$RY_FAKE_FORGE_LOG"
+  RY_FORGE=gitlab run ry-pr.sh --title "$(printf 'y%.0s' $(seq 1 300))" "$G"
+  [ "$status" -eq 0 ]
+  t=$(sed -n 's/.*--title \(.*\) --description.*/\1/p' "$RY_FAKE_FORGE_LOG")
+  [ "${#t}" -le 255 ]
 }

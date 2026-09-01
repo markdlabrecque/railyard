@@ -60,6 +60,11 @@ it, so a missing or malformed field is a failure, not a style note:
 `risk` is the yardmaster's cue to look closer, so grade it honestly: anything
 but `low` gets read. A survey's handoff carries no such block.
 
+The waybill's first line is a **title**, not an instruction: a summary of the
+whole task in at most 80 characters, with the body starting on line 3. It
+becomes the pull/merge request title verbatim. Read it for scope; take your
+instructions from the body.
+
 {{setup}}
 Task:
 {{waybill}}

@@ -9,6 +9,10 @@
 #                       [--base <branch>] [--after <id>[,<id>...]]
 #                       [--ticket <n>] [--slug <text>] [--prefix <token>]
 #                       <project> <waybill>
+# The waybill's first line is the task's title: at most 80 characters, a short
+# imperative summary of the whole task, with a blank line 2 and the body from
+# line 3. bin/ry-pr.sh uses it verbatim as the PR/MR title, so a longer first
+# line is refused here rather than by the forge after the branch is pushed.
 # The id is the name of the work: <ticket>-<slug> with a ticket, the slug alone
 # without one. --ticket is the issue or pull/merge request number (a leading
 # hash is fine) and defaults to the first ticket reference in the waybill's
@@ -53,6 +57,13 @@ done
 [ -n "$shape" ]   || ry_die "need --haul or --survey"
 [ -n "$project" ] || ry_die "need <project>"
 [ -n "$waybill" ] || ry_die "need <waybill>"
+# The waybill's first line is the task's title: bin/ry-pr.sh uses it verbatim
+# as the PR/MR title. Checked here, before any state is written or any siding
+# is cut, because this is the only moment it is cheap to fix -- the alternative
+# is a rejected PR an hour later, with the branch already pushed.
+wb_title=$(ry_first_line "$waybill")
+[ ${#wb_title} -le $RY_TITLE_MAX ] || ry_die \
+  "the waybill's first line is the task's title and must be at most $RY_TITLE_MAX characters; this one is ${#wb_title}. Put a short imperative summary of the whole task on line 1, leave line 2 blank, and start the body on line 3. Line 1 was: $wb_title"
 # Validate before anything is written: a bad prefix would only surface as a
 # DDEV project that refuses to start, long after dispatch.
 [ "$prefix_set" -eq 0 ] || ry_prefix_valid "$prefix" \

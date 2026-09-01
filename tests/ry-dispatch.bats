@@ -62,3 +62,36 @@ setup() { setup_home; make_project xyz; }
   b=$(ry-dispatch.sh --haul xyz "b" | sed -n 's/^id=//p')
   [ "$a" != "$b" ]
 }
+
+# The waybill's first line is the PR/MR title. Refused here, at the one moment
+# it is cheap to fix, rather than by the forge after ry-pr.sh has pushed.
+@test "a waybill whose first line is over the cap is refused, and cuts no siding" {
+  long="A really long prose first line of the kind every waybill on disk opened with before this rule existed."
+  [ "${#long}" -gt 80 ]
+  run ry-dispatch.sh --haul --mode pr xyz "$long"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"80"* ]]
+  [[ "$output" == *"${#long}"* ]]
+  # nothing written, nothing cut, no branch left behind
+  [ -z "$(ls "$RY_HOME/state")" ]
+  [ -z "$(ls -A "$RY_HOME/yard")" ]
+  [ -z "$(git -C "$RY_HOME/projects/xyz" for-each-ref --format='%(refname)' 'refs/heads/ry/*')" ]
+}
+
+@test "the cap is on the first line only: line 1 at exactly 80 is fine, 81 is not" {
+  at80=$(printf 'b%.0s' $(seq 1 80))
+  id=$(ry-dispatch.sh --haul xyz "$at80
+
+A body of prose as long as it likes, well past eighty characters, on line three." \
+    | sed -n 's/^id=//p')
+  [ -n "$id" ]
+  [ "$(head -n1 "$RY_HOME/state/$id.waybill.md")" = "$at80" ]
+  run ry-dispatch.sh --haul xyz "$(printf 'c%.0s' $(seq 1 81))"
+  [ "$status" -ne 0 ]
+}
+
+@test "surveys are held to the same cap as hauls" {
+  run ry-dispatch.sh --survey xyz "$(printf 'd%.0s' $(seq 1 81))"
+  [ "$status" -ne 0 ]
+  [ -z "$(ls "$RY_HOME/state")" ]
+}
