@@ -44,6 +44,35 @@ EOF
   [ ! -s "$RY_HOME/state/inbox.md" ] || [ ! -f "$RY_HOME/state/inbox.md" ]
 }
 
+# Handing an executable file with no `#!` to exec is not an error: execvp(3)
+# runs it with /bin/sh, which is bash on macOS and dash on Debian and Ubuntu.
+# A shebang-less start script would then get a different shell per machine, and
+# the first bashism in it would fail on Linux only. So railyard names bash.
+@test "a shebang-less script runs under bash, not whatever /bin/sh is" {
+  make_start_script xyz <<'EOF'
+echo "bash_version=${BASH_VERSION:-none}"
+v=RY_PROJECT; echo "indirect=${!v-broken}"
+EOF
+  id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
+  run startlog "$id"
+  [ ! -f "$RY_HOME/state/$id.setup-failed.md" ]
+  [[ "$output" != *bash_version=none* ]]
+  [[ "$output" == *indirect=xyz* ]]
+}
+
+@test "an executable script's own shebang is honoured" {
+  make_start_script xyz <<'EOF'
+#!/bin/sh
+echo "argv0=$0"
+echo "shebang-was-used"
+EOF
+  id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
+  run startlog "$id"
+  [[ "$output" == *shebang-was-used* ]]
+  # Run directly, so argv[0] is the script itself -- not "bash <path>".
+  [[ "$output" == *"argv0=$RY_HOME/yard/xyz/$id/.railyard/worktree-start.sh"* ]]
+}
+
 @test "a start script with no execute bit still runs" {
   make_start_script xyz --not-executable <<'EOF'
 echo ran-anyway

@@ -268,6 +268,23 @@ ry_run_start_script() {  # <id> <siding> <project>: 1 when the script failed
   envv=(RY_HOME="$home" RY_ID="$id" RY_BIN="$bindir" RY_BACKEND="$backend"
         RY_SIDING="$siding" RY_PROJECT="$project" RY_FIXTURE_PATH="$fixtures")
 
+  # Which interpreter runs it. A `#!` line on an executable file is the
+  # project's own choice and is honoured; everything else runs under bash, by
+  # name.
+  #
+  # Naming bash matters. Handing an executable file with no `#!` to exec is not
+  # an error: execvp(3) falls back to running it with /bin/sh, which is bash on
+  # macOS and dash on Debian and Ubuntu. So a shebang-less start script would
+  # get a different shell depending on the machine, and the first bashism in it
+  # would fail on Linux only -- which is exactly how this was found.
+  local first=""
+  local -a runner
+  if [ -x "$script" ] && IFS= read -r first < "$script" && [ "${first#\#!}" != "$first" ]; then
+    runner=("$script")
+  else
+    runner=(bash "$script")
+  fi
+
   # Job control gives the script its own process group, so a timeout can kill
   # the whole tree. Without it a hung child of the script would outlive the
   # kill and keep the log open. `timeout(1)` is GNU coreutils and is not on a
@@ -276,8 +293,7 @@ ry_run_start_script() {  # <id> <siding> <project>: 1 when the script failed
   set -m
   (
     cd "$siding" || exit 127
-    if [ -x "$script" ]; then exec env "${envv[@]}" "$script"
-    else exec env "${envv[@]}" bash "$script"; fi
+    exec env "${envv[@]}" "${runner[@]}"
   ) >"$log" 2>&1 &
   pid=$!
   [ "$monitor" -eq 1 ] || set +m

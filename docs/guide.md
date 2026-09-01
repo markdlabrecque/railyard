@@ -293,7 +293,8 @@ nothing at all when it is absent. No config line, no registration.
 |---|---|
 | **Path** | `.railyard/worktree-start.sh` in the project repo. Found by path or not at all. |
 | **When** | At couple time: after the siding is cut and after its `.ddev/config.local.yaml` name override is written, before the engine launches. So `ddev` is safe to call. |
-| **Shape** | Runs for every task, hauls and surveys alike. Run directly when executable, otherwise under `bash`. |
+| **Shape** | Runs for every task, hauls and surveys alike. |
+| **Interpreter** | `bash`, unless the file is executable *and* starts with a `#!` line — then that shebang is honoured, so a start script may be Python or anything else. Never `/bin/sh`: it is bash on macOS and dash on Debian and Ubuntu, so a script that relied on it would work on one machine and not the other. Give a non-bash script both a shebang and the execute bit; without them it runs under bash. |
 | **Working directory** | The siding. |
 | **Output** | stdout and stderr, captured to `state/<id>.start.log`. That log is the record of what setup did; nothing streams anywhere else. |
 | **Timeout** | 600 seconds, then the script and its children are killed. |
