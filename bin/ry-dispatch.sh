@@ -62,6 +62,8 @@ done
 # is cut, because this is the only moment it is cheap to fix -- the alternative
 # is a rejected PR an hour later, with the branch already pushed.
 wb_title=$(ry_first_line "$waybill")
+[ -n "$wb_title" ] || ry_die \
+  "the waybill's first line is the task's title and it is blank. Put a short imperative summary of the whole task on line 1, leave line 2 blank, and start the body on line 3."
 [ ${#wb_title} -le $RY_TITLE_MAX ] || ry_die \
   "the waybill's first line is the task's title and must be at most $RY_TITLE_MAX characters; this one is ${#wb_title}. Put a short imperative summary of the whole task on line 1, leave line 2 blank, and start the body on line 3. Line 1 was: $wb_title"
 # Validate before anything is written: a bad prefix would only surface as a

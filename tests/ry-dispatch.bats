@@ -95,3 +95,31 @@ A body of prose as long as it likes, well past eighty characters, on line three.
   [ "$status" -ne 0 ]
   [ -z "$(ls "$RY_HOME/state")" ]
 }
+
+@test "a blank first line is refused too: the title is not optional" {
+  run ry-dispatch.sh --haul xyz "
+
+The body starts here, and line 1 is where the title should have been."
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"blank"* ]]
+  [ -z "$(ls "$RY_HOME/state")" ]
+  run ry-dispatch.sh --haul xyz "   "
+  [ "$status" -ne 0 ]
+  [ -z "$(ls "$RY_HOME/state")" ]
+}
+
+# The cap lives in three places: RY_TITLE_MAX, and the two documents that bind
+# the people who have to obey it. Changing the number in one of them is AC7
+# rotting behind a green suite, so the suite reads all three.
+@test "the waybill title rule is stated where it binds, with the same cap" {
+  cap=$(bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-lib.sh'; printf %s \"\$RY_TITLE_MAX\"")
+  [ "$cap" = 80 ]
+  for f in "$BATS_TEST_DIRNAME/../AGENTS.md" \
+           "$BATS_TEST_DIRNAME/../templates/engine-preamble.md"; do
+    grep -qi 'first line' "$f" || { echo "$f does not mention the first line"; false; }
+    grep -qi 'title' "$f"      || { echo "$f does not call it a title"; false; }
+    grep -q "$cap characters" "$f" \
+      || { echo "$f does not state the cap as $cap characters"; false; }
+    grep -q 'line 3' "$f" || { echo "$f does not say the body starts on line 3"; false; }
+  done
+}

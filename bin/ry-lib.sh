@@ -86,7 +86,12 @@ RY_TITLE_MAX=80         # characters; the reader's limit, not the API's
 RY_TITLE_HARD_MAX=255   # GitLab's API maximum (GitHub allows 256)
 
 ry_first_line() {  # <text> -> its first line, trailing whitespace trimmed
-  printf '%s\n' "$1" | head -n 1 | LC_ALL=C sed -e 's/[[:space:]]*$//'
+  # No pipe on purpose: `printf | head` under `set -o pipefail` takes SIGPIPE
+  # on a long enough argument and aborts the caller with exit 141 and no
+  # message at all. Pure parameter expansion cannot.
+  local t=${1%%$'\n'*}
+  while [ -n "$t" ] && [[ ${t: -1} == [[:space:]] ]]; do t=${t%?}; done
+  printf '%s\n' "$t"
 }
 
 ry_title_clamp() {  # <text> -> its first line, never over RY_TITLE_HARD_MAX

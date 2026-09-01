@@ -64,7 +64,8 @@ _Avoid_: delivery method, strategy
 
 **Waybill**:
 The task instructions handed to an engine: goal, acceptance criteria, constraints,
-areas to look at, and what "verified" means. Written by the yardmaster.
+areas to look at, and what "verified" means. Written by the yardmaster. Its first
+line is the task's **title**, not prose — see AGENTS.md § Waybill.
 _Avoid_: brief, prompt, ticket, spec
 
 **Report**:

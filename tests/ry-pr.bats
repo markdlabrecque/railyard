@@ -27,7 +27,7 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   git -C "$PDIR" fetch -q; git -C "$PDIR" rev-parse --verify -q "origin/ry/$ID" >/dev/null
   grep -q -- "--source-branch ry/$ID" "$RY_FAKE_FORGE_LOG"
   grep -q -- "--target-branch main" "$RY_FAKE_FORGE_LOG"
-  grep -q -- "--title add dark mode" "$RY_FAKE_FORGE_LOG"
+  grep -q -- "--title add dark mode --description" "$RY_FAKE_FORGE_LOG"
   grep -q '^pr_url=https://gitlab.example.com/grp/sub/r/-/merge_requests/12$' "$RY_HOME/state/$ID.meta"
   grep -q '^forge=gitlab$' "$RY_HOME/state/$ID.meta"
   [ "$(cat "$RY_HOME/state/$ID.status")" = "pr-open" ]
@@ -206,7 +206,10 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   [ "$status" -eq 0 ]
   grep -q -- "gh pr create" "$RY_FAKE_FORGE_LOG"
   t=$(sed -n 's/.*--title \(.*\) --body.*/\1/p' "$RY_FAKE_FORGE_LOG")
+  [ -n "$t" ]
   [ "${#t}" -le 255 ]
+  [ "${#t}" -gt 200 ]
+  [[ "$t" == *"..." ]]
 }
 
 @test "--title still wins over the waybill, and is itself clamped" {
@@ -224,5 +227,8 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   RY_FORGE=gitlab run ry-pr.sh --title "$(printf 'y%.0s' $(seq 1 300))" "$G"
   [ "$status" -eq 0 ]
   t=$(sed -n 's/.*--title \(.*\) --description.*/\1/p' "$RY_FAKE_FORGE_LOG")
+  [ -n "$t" ]
   [ "${#t}" -le 255 ]
+  [ "${#t}" -gt 200 ]
+  [[ "$t" == *"..." ]]
 }
