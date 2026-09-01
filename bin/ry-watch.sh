@@ -82,11 +82,15 @@ pass() {
       # A stalled engine whose siding still registers the Stop hook is
       # probably just thinking; one that does not can never report on its own
       # (issue #5) and needs a distinct line so the yardmaster knows to peek.
-      siding=$(ry_meta_get "$id" siding)
-      if ry_stop_hook_registered "$siding"; then
+      # ry_meta_get dies on a missing meta, and pass() is not a subshell: an
+      # unreadable meta would take the whole daemon down, which is the silent
+      # and total failure #5 is about. An engine with no siding to read is
+      # reported as silent, the older and weaker claim of the two.
+      siding=$(ry_meta_get "$id" siding 2>/dev/null || true)
+      if [ -z "$siding" ] || ry_stop_hook_registered "$siding"; then
         post "[railyard] engine $id silent for ${age}m (status running, no turn end); check window ry-$id"
       else
-        post "[railyard] engine $id not reporting: its siding ($siding) has no Stop hook registered (issue #5); peek at window ry-$id -- the work may be finished"
+        post "[railyard] engine $id not reporting for ${age}m: its siding ($siding) registers no Stop hook, so no turn end can ever arrive (issue #5); peek at window ry-$id -- the work may already be done"
       fi
       : > "$st/$id.stall-warned"
     fi

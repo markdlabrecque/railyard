@@ -172,6 +172,10 @@ ry_claude_trust() {  # <dir>: pre-accept Claude Code's folder-trust dialog for d
 # project or a previous launch already put in that file.
 
 RY_STOP_HOOK_FILE=".claude/settings.local.json"
+# The exclude pattern covers the mktemp siblings too: a launch killed between
+# mktemp and mv would otherwise leave settings.local.json.aB3xY9 in the siding,
+# and one untracked file is all it takes for ry-pr.sh to refuse the PR.
+RY_STOP_HOOK_IGNORE=".claude/settings.local.json*"
 
 ry_write_stop_hook() {  # <siding> <bindir>: register ry-engine-stop.sh as the Stop hook, merged
   # Never settings.json -- railyard's own sidings carry a tracked one, and
@@ -191,7 +195,7 @@ ry_write_stop_hook() {  # <siding> <bindir>: register ry-engine-stop.sh as the S
     ' > "$tmp"; then
     mv "$tmp" "$dir/settings.local.json"
   else
-    rm -f "$tmp"; ry_die "could not update $dir/settings.local.json"
+    rm -f "$tmp"; ry_die "could not write $dir/settings.local.json. If that file already exists, it is not valid JSON -- railyard merges its Stop hook into it and jq could not read it. Fix or delete the file, then couple again; without the hook this engine can never report a turn end."
   fi
 }
 
@@ -206,9 +210,12 @@ ry_gitignore_stop_hook() {  # <siding>: keep the siding clean after ry_write_sto
   # operator's machine, or another engine on another host would go dirty.
   local siding=$1 common
   git -C "$siding" -c core.excludesfile=/dev/null check-ignore -q -- "$RY_STOP_HOOK_FILE" && return 0
-  common=$(git -C "$siding" rev-parse --git-common-dir)
-  grep -qxF "$RY_STOP_HOOK_FILE" "$common/info/exclude" 2>/dev/null && return 0
-  printf '%s\n' "$RY_STOP_HOOK_FILE" >> "$common/info/exclude"
+  # --git-common-dir is absolute for a linked worktree and relative for an
+  # ordinary checkout, so resolve it against the siding rather than $PWD.
+  common=$(cd "$siding" && cd "$(git rev-parse --git-common-dir)" && pwd)
+  mkdir -p "$common/info"
+  grep -qxF "$RY_STOP_HOOK_IGNORE" "$common/info/exclude" 2>/dev/null && return 0
+  printf '%s\n' "$RY_STOP_HOOK_IGNORE" >> "$common/info/exclude"
 }
 
 ry_stop_hook_registered() {  # <siding>: does it register ry-engine-stop.sh as a Stop hook?

@@ -98,7 +98,7 @@ JSON
   siding="$RY_HOME/yard/xyz/$id"
   [ -z "$(git -C "$siding" status --porcelain)" ]
   common=$(git -C "$siding" rev-parse --git-common-dir)
-  grep -qxF '.claude/settings.local.json' "$common/info/exclude"
+  grep -qxF '.claude/settings.local.json*' "$common/info/exclude"
 }
 
 @test "the exclude line is written once even if launch runs twice" {
@@ -119,21 +119,13 @@ JSON
   [ -z "$(git -C "$siding" status --porcelain)" ]
 }
 
-# --- ry-engine-stop.sh must be idempotent per turn ----------------------
-# The hook is now registered twice (argv --settings and the siding's
-# settings.local.json), so a single turn end can invoke ry-engine-stop.sh
-# twice. One report per turn, but a genuinely new turn must still get through.
+# --- ry-engine-stop.sh must never swallow a turn end ---------------------
+# The hook is registered in two places now, but Claude Code fires an identical
+# hook command once however many settings sources name it, so this script does
+# no de-duplication of its own. These guard that: whatever a future change
+# thinks it knows about duplicates, a real turn end always gets reported.
 
-@test "stop hook is idempotent for two identical invocations of the same turn" {
-  id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
-  wait_for_log
-  hook_in="{\"session_id\":\"s1\",\"transcript_path\":\"$T\",\"stop_hook_active\":false}"
-  RY_ID=$id ry-engine-stop.sh <<<"$hook_in"
-  RY_ID=$id ry-engine-stop.sh <<<"$hook_in"
-  [ "$(grep -c " $id turn-ended$" "$RY_HOME/state/events.log")" -eq 1 ]
-}
-
-@test "a later turn with a different session id reports again" {
+@test "two turns under different session ids both report" {
   id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
   wait_for_log
   RY_ID=$id ry-engine-stop.sh <<<"{\"session_id\":\"s1\",\"transcript_path\":\"$T\",\"stop_hook_active\":false}"
@@ -141,7 +133,7 @@ JSON
   [ "$(grep -c " $id turn-ended$" "$RY_HOME/state/events.log")" -eq 2 ]
 }
 
-@test "a later turn with a grown transcript (same session id) reports again" {
+@test "two turns under one session id both report" {
   id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
   wait_for_log
   tp="$BATS_TEST_TMPDIR/t.jsonl"
@@ -152,7 +144,7 @@ JSON
   [ "$(grep -c " $id turn-ended$" "$RY_HOME/state/events.log")" -eq 2 ]
 }
 
-@test "with no session id to key on, the hook always reports (never swallows a real turn end)" {
+@test "a hook JSON with no session id still reports, every time" {
   id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
   wait_for_log
   RY_ID=$id ry-engine-stop.sh <<<"{\"transcript_path\":\"$T\",\"stop_hook_active\":false}"
@@ -160,7 +152,7 @@ JSON
   [ "$(grep -c " $id turn-ended$" "$RY_HOME/state/events.log")" -eq 2 ]
 }
 
-@test "with an unreadable transcript, the hook always reports" {
+@test "an unreadable transcript still reports, every time" {
   id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
   wait_for_log
   RY_ID=$id ry-engine-stop.sh <<<"{\"session_id\":\"s1\",\"transcript_path\":\"/no/such/file.jsonl\",\"stop_hook_active\":false}"

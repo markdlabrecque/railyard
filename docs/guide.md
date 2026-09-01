@@ -321,9 +321,9 @@ while railyard hears nothing, forever. A survey once finished a 594-line report
 that way and no one knew (#5).
 
 So the hook is registered in the siding as well, where Claude Code reads it on
-every launch regardless of how the session started. Both registrations fire on
-a normal turn; `bin/ry-engine-stop.sh` reports the turn once and ignores the
-duplicate.
+every launch regardless of how the session started. Two registrations, still
+one report: Claude Code fires an identical hook command once however many
+settings sources name it.
 
 If the project does not already ignore `.claude/settings.local.json`, railyard
 adds it to the clone's `.git/info/exclude` rather than editing the project's

@@ -4,13 +4,13 @@
 # (the whole final message; its first line is the DONE:/BLOCKED: handoff)
 # to state/<id>.last.md for the yardmaster's wake message.
 #
-# Registered twice since issue #5 (argv --settings, and the siding's own
-# settings.local.json), so one real turn end can invoke this script twice.
-# Deduped on session_id + the transcript's size and line count, kept in
-# state/<id>.turnend.key: an identical key is a duplicate invocation of the
-# same turn and is a silent no-op. Anything that cannot be keyed (no
-# session_id, or the transcript missing/unreadable) always reports -- a
-# swallowed real turn end is far worse than one duplicate report.
+# Since issue #5 the hook is registered in two places (the argv --settings file
+# and the siding's own .claude/settings.local.json) so that a --resume relaunch
+# cannot lose it. That is not two reports: Claude Code fires an identical hook
+# command once however many settings sources name it. This script therefore
+# does no de-duplication of its own -- deliberately. Anything that decided a
+# turn end was a duplicate would be the one thing this script must never do,
+# swallow one, and that is the whole of issue #5.
 #
 # Always exits 0: an engine must never be blocked by its own reporter.
 # usage: Claude Stop hook for an engine session; hook JSON on stdin, RY_ID set.
@@ -32,26 +32,6 @@ transcript=$(jq -r '.transcript_path // empty' <<<"$input" 2>/dev/null || true)
 if [ -n "$transcript" ] && [ -f "$transcript" ]; then
   jq -rs '[.[] | select(.type=="assistant") | .message.content[]? | select(.type=="text") | .text] | last // empty' \
     "$transcript" > "$home/state/$id.last.md" 2>/dev/null || true
-fi
-
-# Dedupe key: session_id plus the transcript's current size and line count, so
-# a grown transcript under the same session (a later turn) still keys fresh.
-# No session_id, or a transcript that cannot be sized, means no key at all --
-# and no key means always report, never cache a decision on data this thin.
-session_id=$(jq -r '.session_id // empty' <<<"$input" 2>/dev/null || true)
-key=""
-if [ -n "$session_id" ] && [ -n "$transcript" ] && [ -f "$transcript" ] && [ -r "$transcript" ]; then
-  size=$(wc -c < "$transcript" 2>/dev/null | tr -d ' ' || true)
-  lines=$(wc -l < "$transcript" 2>/dev/null | tr -d ' ' || true)
-  if [ -n "$size" ] && [ -n "$lines" ]; then
-    key="$session_id:$size:$lines"
-  fi
-fi
-keyfile="$home/state/$id.turnend.key"
-if [ -n "$key" ]; then
-  last_key=$(cat "$keyfile" 2>/dev/null || true)
-  [ "$key" = "$last_key" ] && exit 0
-  printf '%s' "$key" > "$keyfile" 2>/dev/null || true
 fi
 
 ry_set_status "$id" turn-ended
