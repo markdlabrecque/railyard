@@ -39,6 +39,13 @@ Split independent asks into independent engines; chain dependent ones with `--af
 
 **Waybill.** Write the task for the engine: goal, acceptance criteria, constraints, files or areas to look at, what "verified" means. The preamble already covers commit/push/handoff rules; write only the task. Name the suspected weakness — the assertion you expect to be soft, the edge case you expect to be missed, the file you expect to be forgotten. The engine hands that line to its inspector, and an inspector told only "review this diff" finds nothing. Nothing can refuse a waybill that omits it, so the engine is told to flag the omission in its handoff instead: a handoff that says the waybill named no weakness is a note to you, not to it.
 
+When the waybill carries a proposal — a reviewer's finding, a suggested fix, a
+cherry-pick — tell the engine to judge it, not obey it, and name what a good
+rejection looks like. Engines given that line have rejected a false review
+finding, skipped a cherry-pick that was meaningless on the target branch, and
+replaced a test that would have passed either way. A waybill that only states
+the fix gets the fix, right or wrong.
+
 **Dispatch.** `bin/ry-dispatch.sh --haul|--survey [--mode <m>] [--after <id>[,<id>]] [--ticket <n>] [--slug <text>] [--prefix <token>] <project> "<waybill>"`. Tell the dispatcher one line: what was dispatched, the ticket it is against, and what it waits on.
 
 A dispatch is all-or-nothing. If the engine's terminal cannot be opened —
