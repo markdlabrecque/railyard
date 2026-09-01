@@ -64,10 +64,14 @@ for key in inspector suite must-fix "revert check" risk; do
       # The grade is a whole word: "lowkey unsure" is not a risk grade.
       case ${val%%[![:alnum:]]*} in low|medium|high) ;; *) bad+=("$key") ;; esac
       ;;
-    suite|must-fix)
-      # Both fields are counts. "suite: not run" and "must-fix: clean" are
-      # non-empty and say nothing, which is the evasion worth catching.
-      [[ $val == *[0-9]* ]] || bad+=("$key")
+    suite)
+      # The counts the preamble's format asks for, not merely a digit
+      # somewhere: "reviewed issue #13" is not a suite result.
+      [[ $val =~ [0-9]+[[:space:]]+passed ]] &&
+      [[ $val =~ [0-9]+[[:space:]]+failed ]] || bad+=("$key")
+      ;;
+    must-fix)
+      [[ $val =~ [0-9]+[[:space:]]+raised ]] || bad+=("$key")
       ;;
     "revert check")
       # Either a real file:line, or the documented escape hatch with a reason.

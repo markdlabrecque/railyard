@@ -199,3 +199,27 @@ EOF
   [[ "$output" == *"revert check"* ]]
 }
 
+@test "a digit somewhere is not a suite result" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  well_formed_block | sed 's/^- suite:.*/- suite: reviewed issue #13/' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"suite"* ]]
+}
+
+@test "a suite result must carry both counts, not just the passes" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  well_formed_block | sed 's|^- suite:.*|- suite: bats tests/ — 300 passed|' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"suite"* ]]
+}
+
+@test "a digit somewhere is not a must-fix count" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  well_formed_block | sed 's/^- must-fix:.*/- must-fix: see PR #23/' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"must-fix"* ]]
+}
+
