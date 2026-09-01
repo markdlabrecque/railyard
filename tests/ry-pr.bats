@@ -138,6 +138,12 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   [ "$status" -ne 0 ]
 }
 
+@test "pr --auto-merge-method as the trailing argument with no value is an error, not a crash" {
+  RY_FORGE=gitlab run ry-pr.sh --auto-merge --auto-merge-method
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"needs a value"* ]]
+}
+
 @test "watch turns failing checks into one inbox line with the url" {
   RY_FORGE=gitlab ry-pr.sh "$ID" >/dev/null
   echo '{"state":"opened","head_pipeline":{"status":"failed"}}' > "$RY_FAKE_GLAB_VIEW"

@@ -67,9 +67,14 @@ A second task with the same name gets `-2`.
   MRs report `findings=n/a`: reviewer notes there carry no severity, so no
   number is invented.
   `--auto-merge` is opt-in and only used when the dispatcher said so at
-  dispatch time — it does not change what you see: the watcher still arms it
-  itself, only once a check exists for the PR's exact head commit, and still
-  reports `pr-merged` the same way once it lands.
+  dispatch time. The watcher arms it for you, and only once a check that can
+  report a verdict exists for the PR's exact head commit; if the head later
+  moves it disarms and re-gates (`auto-merge-disarmed`). `pr-merged` still
+  arrives the same way once it lands. Two lines are yours to act on:
+  `auto-merge-blocked` (a conflict, a failed check, or a forge that will not
+  auto-merge at all — auto-merge is off for this PR until you act) and
+  `auto-merge-waiting` (still no check for the head; it keeps trying, so this
+  needs you only if it does not clear).
 - survey: relay the findings; promote follow-up work into new hauls only if asked.
 
 Anything queued behind a merged task couples itself; the watcher wakes you when its engine starts.
