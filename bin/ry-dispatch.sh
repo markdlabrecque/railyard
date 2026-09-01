@@ -136,18 +136,29 @@ printf 'id=%s\nbase=%s\nsiding=%s\n' "$id" "$base" "$siding"
 if [ -n "$after" ]; then
   printf 'status=queued after=%s\n' "$after"
 else
-  # Dispatch is all-or-nothing: the id=/base=/siding= lines above look like
-  # success, so a launch that fails here cannot be left to a bare `error:` --
-  # this is not a task the dispatcher already knows about (that's ry-couple.sh
-  # re-coupling a queued --after task), it never existed as far as anyone but
-  # this script is concerned, so every trace this script itself wrote gets
-  # undone. ry-couple.sh has already rolled the siding, branch and status back
-  # by the time it fails; there is nothing left to relaunch, only to redo.
+  # Dispatch is all-or-nothing, but only for the failure this is actually
+  # about: a launch that never opened a terminal. ry-couple.sh can also fail
+  # for reasons that leave the task perfectly recoverable as `queued` (a
+  # fetch failure, a diverged base, a bad --prefix) -- those already say so
+  # on stderr, and rolling them back too would blame "the backend" for a
+  # cause this script cannot see and cannot know. The sentinel ry-couple.sh
+  # writes only on a launch failure (see there, and ry-watch.sh) is the
+  # signal: present, this task never existed as far as anyone but this
+  # script is concerned, so every trace this script itself wrote gets
+  # undone -- ry-couple.sh has already rolled the siding, branch and status
+  # back by the time it fails, so there is nothing left to relaunch, only to
+  # redo. Absent, the id=/base=/siding= lines above already say enough; the
+  # error ry-couple.sh printed explains why, and the task is left queued.
   if ! "$(dirname "$0")/ry-couple.sh" "$id" >/dev/null; then
-    rm -f "$home/state/$id.meta" "$home/state/$id.status" "$home/state/$id.waybill.md" \
-          "$home/state/$id.settings.json" "$home/state/$id.setup-failed.md"
-    rm -rf "$home/data/$id"
-    printf 'FAILED: dispatch of %s could not launch an engine; everything written for it has been rolled back. Fix the backend and dispatch again -- there is nothing to recover, this attempt left no trace.\n' "$id" >&2
+    if [ -e "$home/state/$id.launch-failed" ]; then
+      rm -f "$home/state/$id.meta" "$home/state/$id.status" "$home/state/$id.waybill.md" \
+            "$home/state/$id.settings.json" "$home/state/$id.setup-failed.md" \
+            "$home/state/$id.launch-failed"
+      rm -rf "$home/data/$id"
+      printf 'FAILED: dispatch of %s could not launch an engine; everything written for it has been rolled back. Fix the backend and dispatch again -- there is nothing to recover, this attempt left no trace.\n' "$id" >&2
+    else
+      printf 'FAILED: dispatch of %s could not be coupled; see the error above. %s is left queued so nothing is lost -- fix it and run bin/ry-couple.sh %s to retry.\n' "$id" "$id" "$id" >&2
+    fi
     exit 1
   fi
 fi

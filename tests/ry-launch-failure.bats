@@ -180,3 +180,60 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; . "$BATS_TEST_DIRNAME/../bin/ry
   grep -q "$id" "$RY_HOME/state/events.log"
   grep -q "launch-failed" "$RY_HOME/state/events.log"
 }
+
+@test "tmux dispatch: a launch failure rolls everything back too (';' would swallow it)" {
+  export RY_BACKEND=tmux
+  # Its own directory, not tests/fakebin/: setup_tmux puts tests/fakebin/ on
+  # PATH ahead of real tmux too (for the fake claude binary), and every
+  # other tmux test in the suite depends on that being the real tmux.
+  export PATH="$BATS_TEST_DIRNAME/fakebin-tmux-fail:$PATH"
+  export RY_FAKE_TMUX_FAIL_OPEN=1
+  run ry-dispatch.sh --haul xyz "fix it"
+  [ "$status" -ne 0 ]
+  id=$(sed -n 's/^id=//p' <<<"$output")
+  [ -n "$id" ]
+
+  [ ! -d "$RY_HOME/yard/xyz/$id" ]
+  ! git -C "$RY_HOME/projects/xyz" branch --list "ry/$id" | grep -q "ry/$id"
+  [ ! -f "$RY_HOME/state/$id.meta" ]
+  [ ! -f "$RY_HOME/state/$id.status" ]
+  [ ! -f "$RY_HOME/state/$id.waybill.md" ]
+  # a lying `target=` never made it into anything, because there is nothing left
+  [[ "$output" != *"target=ry-"* ]]
+
+  grep -q "$id" "$RY_HOME/state/events.log"
+  grep -q "launch-failed" "$RY_HOME/state/events.log"
+}
+
+# --- a persistent failure must not feed the watcher's auto-couple loop -----
+
+@test "watch does not re-couple a queued task once its launch has failed, and does not repeat the event" {
+  a=$(ry-dispatch.sh --haul xyz "a" | sed -n 's/^id=//p')
+  b=$(ry-dispatch.sh --haul --after "$a" xyz "b" | sed -n 's/^id=//p')
+  echo merged > "$RY_HOME/state/$a.status"
+
+  export RY_FAKE_ORCA_CREATE_FAILS=99
+  run ry-watch.sh --once
+  [ "$status" -eq 0 ]
+  [ "$(cat "$RY_HOME/state/$b.status")" = queued ]
+  [ -f "$RY_HOME/state/$b.launch-failed" ]
+  [ "$(grep -c 'launch-failed' "$RY_HOME/state/events.log")" -eq 1 ]
+  creates_1=$(grep -c -- 'terminal create' "$RY_FAKE_ORCA_LOG")
+
+  # A second pass sees the same queued, ready task -- and the sentinel.
+  run ry-watch.sh --once
+  [ "$status" -eq 0 ]
+  [ "$(cat "$RY_HOME/state/$b.status")" = queued ]
+  [ -f "$RY_HOME/state/$b.launch-failed" ]
+  [ -f "$RY_HOME/state/$b.meta" ]
+  [ -f "$RY_HOME/state/$b.waybill.md" ]
+  [ "$(grep -c 'launch-failed' "$RY_HOME/state/events.log")" -eq 1 ]
+  [ "$(grep -c -- 'terminal create' "$RY_FAKE_ORCA_LOG")" -eq "$creates_1" ]
+
+  # A deliberate manual retry clears the sentinel on entry and tries again --
+  # it still fails (still FAILS=99), so the sentinel is written straight back.
+  run ry-couple.sh "$b"
+  [ "$status" -ne 0 ]
+  [ -f "$RY_HOME/state/$b.launch-failed" ]
+  [ "$(grep -c -- 'terminal create' "$RY_FAKE_ORCA_LOG")" -gt "$creates_1" ]
+}

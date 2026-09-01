@@ -21,6 +21,13 @@ home=$(ry_home)
 [ "$(cat "$home/state/$id.status" 2>/dev/null || true)" = queued ] \
   || ry_die "$id is not queued; only a queued task can be coupled"
 
+# A prior launch failure leaves this sentinel so ry-watch.sh's auto-couple
+# loop stops retrying a task on its own (see below and ry-watch.sh). Being
+# asked to couple at all -- by hand, or by the watcher once the sentinel is
+# gone -- is the deliberate retry, so it is cleared here rather than only on
+# success: a couple that fails again just writes it straight back.
+rm -f "$home/state/$id.launch-failed"
+
 ry_backend_no_split
 
 project=$(ry_meta_get "$id" project); base=$(ry_meta_get "$id" base)
@@ -83,16 +90,29 @@ fi
 
 if [ "$(ry_backend)" != none ]; then
   if ! "$(dirname "$0")/ry-engine-launch.sh" "$id" >/dev/null; then
-    # The terminal never opened. Nothing half-cut: undo the worktree exactly
-    # as the ddev-override failure above does, and put the task back to
-    # queued rather than leaving it stranded in `dispatched`. Its meta and
-    # waybill survive -- this is a task the dispatcher already knows about
-    # (queued behind a blocker, most likely), and re-coupling it is the
-    # recovery, so there is nothing here worth throwing away.
+    # The terminal never opened. Nothing half-cut: the siding's own DDEV
+    # project goes with it, not after it (ry-decouple.sh's own rule) -- the
+    # start script above may already have run `ddev start`, and removing the
+    # worktree without this leaves containers up and a registration pointing
+    # at a path that no longer exists, which the next couple attempt (same
+    # prefix) would then collide with. Then undo the worktree exactly as the
+    # ddev-override failure above does, and put the task back to queued
+    # rather than leaving it stranded in `dispatched`. Its meta and waybill
+    # survive -- this is a task the dispatcher already knows about (queued
+    # behind a blocker, most likely), and re-coupling it is the recovery, so
+    # there is nothing here worth throwing away.
+    ry_ddev_delete "$siding" "$prefix" "$project"
     git -C "$pdir" worktree remove --force "$siding" 2>/dev/null || true
     git -C "$pdir" worktree prune
     git -C "$pdir" branch -q -D "$branch" 2>/dev/null || true
     ry_set_status "$id" queued
+    # The sentinel ry-watch.sh checks before it auto-couples a queued task
+    # again: without it, a persistent backend failure on an --after task
+    # would have the watcher re-cut the worktree, rerun the start script and
+    # burn another 3 attempts every RY_WATCH_INTERVAL, forever. A manual
+    # ry-couple.sh clears it on entry (above), so the deliberate retry this
+    # is meant for still works.
+    : > "$home/state/$id.launch-failed"
     ry_event "$id" "launch-failed could not open a terminal for $id"
     printf 'error: could not launch %s; siding rolled back, %s is queued again\n' "$id" "$id" >&2
     exit 1

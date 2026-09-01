@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Fake tmux CLI, only for the one test that needs a launch to fail without a
+# real tmux server: RY_FAKE_TMUX_FAIL_OPEN makes `new-window` fail as if the
+# terminal could not be opened. Everything else is answered just well enough
+# for railyard's own calls (ry_tmux_ensure_session, ry_tmux_open_window) to
+# get through; no other test in the suite puts this fake ahead of real tmux
+# on PATH.
+[ "$1" = -L ] && shift 2
+case "$1" in
+  has-session) exit 1 ;;   # never yet exists -> ensure_session creates one
+  new-session) exit 0 ;;
+  new-window)
+    if [ -n "${RY_FAKE_TMUX_FAIL_OPEN:-}" ]; then
+      echo "fake tmux: could not open window" >&2
+      exit 1
+    fi
+    exit 0 ;;
+  *) exit 0 ;;
+esac
