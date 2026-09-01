@@ -3,5 +3,32 @@ printf 'glab %s\n' "$*" >> "$RY_FAKE_FORGE_LOG"
 case "$1 $2" in
   "mr create") echo "https://gitlab.example.com/grp/sub/r/-/merge_requests/12" ;;
   "mr view")   cat "$RY_FAKE_GLAB_VIEW" ;;
+  api\ *)
+    # REST API reads for ry-auto-merge.sh, e.g. `api projects/:id/merge_requests/12`.
+    # RY_FAKE_GLAB_API_SEQ, when set and non-empty, hands out one line per call
+    # (popped off the front) so a test can walk a settling MR through several
+    # states; once exhausted (or when unset) it falls back to the static
+    # RY_FAKE_GLAB_API fixture.
+    if [ -n "${RY_FAKE_GLAB_API_SEQ:-}" ] && [ -s "$RY_FAKE_GLAB_API_SEQ" ]; then
+      line=$(head -n1 "$RY_FAKE_GLAB_API_SEQ")
+      tail -n +2 "$RY_FAKE_GLAB_API_SEQ" > "$RY_FAKE_GLAB_API_SEQ.tmp"
+      mv "$RY_FAKE_GLAB_API_SEQ.tmp" "$RY_FAKE_GLAB_API_SEQ"
+      printf '%s\n' "$line"
+    else
+      cat "$RY_FAKE_GLAB_API"
+    fi ;;
+  "mr merge")
+    yes=0
+    for a in "$@"; do case "$a" in --yes|-y) yes=1 ;; esac; done
+    if [ "$yes" -ne 1 ]; then
+      echo "aborted: confirmation required" >&2; exit 1
+    fi
+    if [ -n "${RY_FAKE_GLAB_MERGE_FAILS:-}" ] && [ -e "$RY_FAKE_GLAB_MERGE_FAILS" ]; then
+      line=$(head -n1 "$RY_FAKE_GLAB_MERGE_FAILS")
+      tail -n +2 "$RY_FAKE_GLAB_MERGE_FAILS" > "$RY_FAKE_GLAB_MERGE_FAILS.tmp"
+      mv "$RY_FAKE_GLAB_MERGE_FAILS.tmp" "$RY_FAKE_GLAB_MERGE_FAILS"
+      if [ -n "$line" ]; then echo "$line" >&2; exit 1; fi
+    fi
+    echo merged ;;
   *) echo "fake glab: unhandled $*" >&2; exit 1 ;;
 esac
