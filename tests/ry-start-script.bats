@@ -60,17 +60,26 @@ EOF
   [[ "$output" == *indirect=xyz* ]]
 }
 
+# The shebang has to be observable in the log, or the test guards nothing: any
+# shell prints the same thing for a script written in shell. /bin/cat is not a
+# shell at all, so it echoes the source back -- including the `#!` line, which
+# a shell would treat as a comment and never print. And unlike /bin/sh, cat is
+# the same program on macOS and Linux, which is the trap this whole change is
+# about.
 @test "an executable script's own shebang is honoured" {
+  [ -x /bin/cat ] || skip "no /bin/cat"
   make_start_script xyz <<'EOF'
-#!/bin/sh
-echo "argv0=$0"
-echo "shebang-was-used"
+#!/bin/cat
+echo EXECUTED-BY-A-SHELL
 EOF
   id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
+  [ ! -f "$RY_HOME/state/$id.setup-failed.md" ]
   run startlog "$id"
-  [[ "$output" == *shebang-was-used* ]]
-  # Run directly, so argv[0] is the script itself -- not "bash <path>".
-  [[ "$output" == *"argv0=$RY_HOME/yard/xyz/$id/.railyard/worktree-start.sh"* ]]
+  # cat ran it: the source came back verbatim, shebang line and all.
+  [[ "$output" == *"#!/bin/cat"* ]]
+  [[ "$output" == *"echo EXECUTED-BY-A-SHELL"* ]]
+  # A shell would have run the echo instead, printing the word alone.
+  [ "$(grep -c '^EXECUTED-BY-A-SHELL$' <<<"$output")" -eq 0 ]
 }
 
 @test "a start script with no execute bit still runs" {
