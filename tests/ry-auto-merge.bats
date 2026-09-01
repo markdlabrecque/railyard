@@ -60,14 +60,108 @@ gl_api() {  # <detailed_merge_status> <head_pipeline-json-or-null>
   [ "$status" -ne 0 ]
 }
 
-@test "already-armed is a no-op success: no forge call at all" {
+@test "armed on the same head: one read, no merge and no disable-auto" {
   open_gh
-  : > "$RY_HOME/state/$ID.auto-armed"
-  before=$(wc -l < "$RY_FAKE_FORGE_LOG")
+  gh_view CLEAN '{"status":"COMPLETED","conclusion":"SUCCESS"}'
+  echo abc123 > "$RY_HOME/state/$ID.auto-armed"
   run ry-auto-merge.sh "$ID"
   [ "$status" -eq 0 ]
-  after=$(wc -l < "$RY_FAKE_FORGE_LOG")
-  [ "$before" -eq "$after" ]
+  [[ "$output" == *"auto-merge=armed sha=abc123"* ]]
+  ! grep -q "pr merge" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "armed but the head moved: disarms, then re-gates the new head" {
+  open_gh
+  echo oldsha > "$RY_HOME/state/$ID.auto-armed"
+  # The new head has no check yet, so the re-gate must refuse to re-arm.
+  gh_view CLEAN ""
+  run ry-auto-merge.sh "$ID"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"auto-merge=disarmed sha=abc123"* ]]
+  [ ! -e "$RY_HOME/state/$ID.auto-armed" ]
+  grep -q -- "gh pr merge https://github.com/o/r/pull/7 --disable-auto" "$RY_FAKE_FORGE_LOG"
+  grep -q "auto-merge-disarmed https://github.com/o/r/pull/7 sha=abc123" "$EV"
+
+  # Next pass: still no check for the new head -> waiting, still not armed.
+  run ry-auto-merge.sh "$ID"
+  [[ "$output" == *"auto-merge=waiting reason=no-checks"* ]]
+  [ ! -e "$RY_HOME/state/$ID.auto-armed" ]
+
+  # A check appears for the new head -> re-armed, pinned to it.
+  gh_view CLEAN '{"status":"IN_PROGRESS"}'
+  run ry-auto-merge.sh "$ID"
+  [[ "$output" == *"auto-merge=armed sha=abc123"* ]]
+  grep -q -- "--auto --merge --match-head-commit abc123" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "github: a rollup of nothing but skipped/neutral is not a check" {
+  open_gh
+  gh_view CLEAN '{"status":"COMPLETED","conclusion":"SKIPPED"},{"status":"COMPLETED","conclusion":"NEUTRAL"}'
+  run ry-auto-merge.sh "$ID"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"auto-merge=waiting reason=no-checks"* ]]
+  ! grep -q "pr merge" "$RY_FAKE_FORGE_LOG"
+  [ ! -e "$RY_HOME/state/$ID.auto-armed" ]
+}
+
+@test "github: one real check alongside a skipped one does gate through" {
+  open_gh
+  gh_view CLEAN '{"status":"COMPLETED","conclusion":"SKIPPED"},{"status":"IN_PROGRESS"}'
+  run ry-auto-merge.sh "$ID"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"auto-merge=armed"* ]]
+}
+
+@test "gitlab: a skipped or manual pipeline is not a check" {
+  open_gl
+  gl_api mergeable '{"sha":"deadbeef","status":"skipped"}'
+  run ry-auto-merge.sh "$ID"
+  [[ "$output" == *"auto-merge=waiting reason=no-checks"* ]]
+  gl_api mergeable '{"sha":"deadbeef","status":"manual"}'
+  run ry-auto-merge.sh "$ID"
+  [[ "$output" == *"auto-merge=waiting reason=no-checks"* ]]
+  ! grep -q "mr merge" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "a blocked reason is reported once per situation, not once per pass" {
+  open_gh
+  gh_view DIRTY '{"status":"COMPLETED","conclusion":"SUCCESS"}'
+  run ry-auto-merge.sh "$ID"
+  run ry-auto-merge.sh "$ID"
+  run ry-auto-merge.sh "$ID"
+  [ "$(grep -c "auto-merge-blocked" "$EV")" -eq 1 ]
+}
+
+@test "a merge failure that is not available is reported once, not once per pass" {
+  open_gh
+  gh_view CLEAN '{"status":"COMPLETED","conclusion":"SUCCESS"}'
+  echo "Auto-merge is not allowed for this repository" > "$BATS_TEST_TMPDIR/gh-merge-fail"
+  export RY_FAKE_GH_MERGE_FAIL="$BATS_TEST_TMPDIR/gh-merge-fail"
+  run ry-auto-merge.sh "$ID"
+  run ry-auto-merge.sh "$ID"
+  [[ "$output" == *"auto-merge=unavailable"* ]]
+  [ "$(grep -c "auto-merge-blocked" "$EV")" -eq 1 ]
+}
+
+@test "gitlab: the exhausted 405 budget still leaves one inbox-worthy event" {
+  open_gl
+  gl_api mergeable '{"sha":"deadbeef","status":"running"}'
+  printf '405 Method Not Allowed\n405 Method Not Allowed\n405 Method Not Allowed\n' > "$BATS_TEST_TMPDIR/f"
+  export RY_FAKE_GLAB_MERGE_FAILS="$BATS_TEST_TMPDIR/f"
+  run ry-auto-merge.sh "$ID"
+  [[ "$output" == *"auto-merge=waiting reason=checking"* ]]
+  grep -q "auto-merge-waiting https://gitlab.example.com/grp/sub/r/-/merge_requests/12 reason=checking" "$EV"
+}
+
+@test "gitlab: an error that merely contains 405 is not mistaken for checking" {
+  open_gl
+  gl_api mergeable '{"sha":"deadbeef","status":"running"}'
+  printf 'failed to merge: source branch 405eabc has diverged\n' > "$BATS_TEST_TMPDIR/f"
+  export RY_FAKE_GLAB_MERGE_FAILS="$BATS_TEST_TMPDIR/f"
+  run ry-auto-merge.sh "$ID"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"auto-merge=unavailable"* ]]
+  [ "$(grep -c "^glab mr merge" "$RY_FAKE_FORGE_LOG")" -eq 1 ]
 }
 
 # --- github ------------------------------------------------------------------
@@ -259,7 +353,19 @@ gl_api() {  # <detailed_merge_status> <head_pipeline-json-or-null>
   grep -q "engine $B coupled" "$RY_HOME/state/inbox.md"
 }
 
-@test "the watcher calls ry-auto-merge.sh only while unarmed" {
+@test "the watcher runs the gate on the PR poll interval, not every pass" {
+  open_gl
+  gl_api mergeable null   # no pipeline yet: nothing to arm, so it keeps looking
+  echo '{"state":"opened","head_pipeline":{"status":"running"}}' > "$RY_FAKE_GLAB_VIEW"
+  RY_PR_POLL_SEC=3600 ry-watch.sh --once
+  n=$(grep -c "^glab api" "$RY_FAKE_FORGE_LOG")
+  [ "$n" -eq 1 ]
+  RY_PR_POLL_SEC=3600 ry-watch.sh --once
+  RY_PR_POLL_SEC=3600 ry-watch.sh --once
+  [ "$(grep -c "^glab api" "$RY_FAKE_FORGE_LOG")" -eq 1 ]
+}
+
+@test "the watcher keeps checking an armed PR, so a moved head is re-gated" {
   open_gl
   gl_api mergeable '{"sha":"deadbeef","status":"success"}'
   echo '{"state":"opened","head_pipeline":{"status":"running"}}' > "$RY_FAKE_GLAB_VIEW"
@@ -267,5 +373,7 @@ gl_api() {  # <detailed_merge_status> <head_pipeline-json-or-null>
   [ -e "$RY_HOME/state/$ID.auto-armed" ]
   n=$(grep -c "^glab api" "$RY_FAKE_FORGE_LOG")
   RY_PR_POLL_SEC=0 ry-watch.sh --once
-  [ "$(grep -c "^glab api" "$RY_FAKE_FORGE_LOG")" -eq "$n" ]
+  # Still read (that is how a moved head is noticed), but never merged twice.
+  [ "$(grep -c "^glab api" "$RY_FAKE_FORGE_LOG")" -gt "$n" ]
+  [ "$(grep -c "^glab mr merge" "$RY_FAKE_FORGE_LOG")" -eq 1 ]
 }

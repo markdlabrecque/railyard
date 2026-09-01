@@ -441,13 +441,22 @@ change it) opts a `pr` task in to arming the forge's own auto-merge once it is
 safe, instead of you merging it by hand. `ry-pr.sh` only records the choice —
 it never arms anything itself, because a check usually does not exist for
 seconds to minutes after the push. The watcher then runs `bin/ry-auto-merge.sh
-<id>` on every pass: it reads the forge's own view of the PR head and refuses
-to arm until at least one check has been created for that exact commit. That
-gate exists because GitHub and GitLab auto-merge both fire against "nothing
-pending", not "checks passed" — arming the instant a PR opens, before CI or a
-review bot has even started, would merge it unreviewed. Once armed it writes
-`state/<id>.auto-armed` and calls the forge no more; the merge itself is still
-observed and reported the normal way, through `pr-merged`.
+<id>` on the same cadence as the PR poll: it reads the forge's own view of the
+PR head and refuses to arm until at least one check that can actually report a
+verdict has been created for that exact commit — a rollup of nothing but
+`skipped` or `neutral` is not a check, and neither is a pipeline for an older
+sha. That gate exists because GitHub and GitLab auto-merge both fire against
+"nothing pending", not "checks passed" — arming the instant a PR opens, before
+CI or a review bot has even started, would merge it unreviewed.
+
+Arming writes the gated sha to `state/<id>.auto-armed`. The watcher keeps
+looking after that, because GitHub leaves auto-merge enabled across a later
+push: if the head moves off the armed sha, railyard disables auto-merge again
+and re-gates the new commit from scratch (`auto-merge-disarmed`). Every
+non-arming outcome — `auto-merge-waiting`, `auto-merge-blocked` — is reported
+once per situation, not once per poll. The merge itself is still observed and
+reported the normal way, through `pr-merged`, which is what couples anything
+queued behind the task.
 
 **Decouple.** `bin/ry-decouple.sh [--delete-branch] <id>` kills the window,
 removes the siding, and archives the state.

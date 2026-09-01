@@ -1,17 +1,21 @@
 #!/usr/bin/env bash
 # Arm auto-merge on an already-open PR/MR whose task opted in via ry-pr.sh
-# --auto-merge (auto_merge=<method> in state/<id>.meta). Run by the watcher,
-# once per pass, for every unarmed pr-mode task with auto_merge set.
+# --auto-merge (auto_merge=<method> in state/<id>.meta). Run by the watcher on
+# the same cadence as the PR poll, for every pr-mode task with auto_merge set.
 #
 # Auto-merge on both forges fires against "nothing pending", not "checks
 # passed": a head commit with no check created yet merges unreviewed the
 # instant it is armed, seconds before CI or CodeRabbit ever starts. So this
 # script is the gate: it reads the forge's own view of the PR head -- never
 # the local worktree HEAD -- and refuses to arm anything until at least one
-# check has been created for that exact commit. Armed once, it writes
-# state/<id>.auto-armed and never calls the forge again for this task; the
-# merge itself is left to the forge, and observed back by ry-pr-poll.sh so
-# queued tasks still couple on pr-merged (#10).
+# check has been created for that exact commit. Arming writes the gated sha to
+# state/<id>.auto-armed; the merge itself is left to the forge, and observed
+# back by ry-pr-poll.sh so queued tasks still couple on pr-merged (#10).
+#
+# Being armed is not the end of it. GitHub keeps auto-merge enabled across a
+# later push, so an armed PR whose head has moved is disarmed and re-gated
+# from scratch — otherwise the gate would hold only for the commit that
+# happened to be at the head when it was armed.
 #
 # usage: ry-auto-merge.sh <id>
 set -euo pipefail
@@ -30,8 +34,11 @@ auto_merge=$(ry_meta_get "$id" auto_merge)
 [ -n "$url" ] || ry_die "no PR recorded for $id"
 [ -n "$auto_merge" ] || ry_die "auto-merge is not enabled for $id (no auto_merge= in its meta)"
 
-# Already armed: nothing to do, and no forge call at all.
-[ ! -e "$st/$id.auto-armed" ] || exit 0
+# The armed sha, if this task has already been armed once. Being armed is not
+# the end of the story: GitHub keeps auto-merge enabled across a later push,
+# so an armed PR whose head has moved is disarmed and re-gated from scratch,
+# rather than merging a commit no check was ever created for.
+armed=$(cat "$st/$id.auto-armed" 2>/dev/null || true)
 
 forge=$(ry_meta_get "$id" forge); siding=$(ry_meta_get "$id" siding)
 case $forge in
@@ -52,24 +59,34 @@ arm() {  # <sha>: write auto-armed, log the event, print, and exit clean
   exit 0
 }
 
-waiting_no_checks() {
-  # Guarded so repeated watcher passes over an unchanged, check-less head do
-  # not spam the inbox with the same "still waiting" line.
-  if [ ! -e "$st/$id.auto-waited" ]; then
-    : > "$st/$id.auto-waited"
-    event "auto-merge-waiting $url reason=no-checks"
-  fi
+# Every non-arming outcome is logged through one guard, because the watcher
+# calls this script once per PR poll for as long as the task is unarmed. An
+# unguarded event would post an inbox line per poll — forever, for a PR that
+# conflicts, or on a repo where auto-merge is simply switched off. The guard
+# remembers "<kind> <reason> <sha>", so the same situation on the same head
+# says nothing twice, and a new head says it again.
+notice() {  # <kind> <reason> [<sha>]
+  local seen key="$1 $2 ${3:-}"
+  seen=$(cat "$st/$id.auto-notice" 2>/dev/null || true)
+  [ "$seen" = "$key" ] && return 0
+  printf '%s\n' "$key" > "$st/$id.auto-notice"
+  event "auto-merge-$1 $url reason=$2"
+}
+
+waiting_no_checks() {  # <sha>
+  notice waiting no-checks "$1"
   printf 'auto-merge=waiting reason=no-checks\n'
   exit 0
 }
 
-waiting_checking() {  # the 405/checking retry budget ran out; a later pass tries again
+waiting_checking() {  # <sha>: the 405/checking retry budget ran out; a later pass retries
+  notice waiting checking "$1"
   printf 'auto-merge=waiting reason=checking\n'
   exit 0
 }
 
-blocked() {  # <reason>
-  event "auto-merge-blocked $url reason=$1"
+blocked() {  # <reason> <sha>
+  notice blocked "$1" "$2"
   printf 'auto-merge=blocked reason=%s\n' "$1"
   exit 0
 }
@@ -79,9 +96,16 @@ skipped() {  # <state>: PR/MR already merged or closed elsewhere
   exit 0
 }
 
-unavailable() {  # <short>: a merge failure that is not 405/checking
-  event "auto-merge-blocked $url reason=unavailable"
+unavailable() {  # <short> <sha>: a merge failure that is not 405/checking
+  notice blocked unavailable "$2"
   printf 'auto-merge=unavailable reason=%s\n' "$1"
+  exit 0
+}
+
+disarmed() {  # <sha>: the head moved off the armed commit
+  rm -f "$st/$id.auto-armed" "$st/$id.auto-notice"
+  event "auto-merge-disarmed $url sha=$1"
+  printf 'auto-merge=disarmed sha=%s\n' "$1"
   exit 0
 }
 
@@ -91,12 +115,24 @@ case $forge in
     state=$(jq -r '.state | ascii_downcase' <<<"$json")
     case $state in open) ;; *) skipped "$state" ;; esac
     sha=$(jq -r '.headRefOid' <<<"$json")
+    if [ -n "$armed" ]; then
+      [ "$armed" != "$sha" ] || { printf 'auto-merge=armed sha=%s\n' "$sha"; exit 0; }
+      (cd "$siding" && gh pr merge "$url" --disable-auto >/dev/null 2>&1) || true
+      disarmed "$sha"
+    fi
 
-    count=$(jq -r '[.statusCheckRollup[]?] | length' <<<"$json")
-    [ "$count" -gt 0 ] || waiting_no_checks
+    # Only a check that can actually report a verdict counts as a check having
+    # been created. A path-filtered workflow answers "skipped" within seconds
+    # of the push, long before CI or a reviewer has posted anything: counting
+    # that as a check would arm — and, being "all green", merge at once — the
+    # very commit nothing has looked at.
+    count=$(jq -r '[.statusCheckRollup[]?
+      | (.conclusion // .state // .status // "") | ascii_downcase
+      | select(. != "skipped" and . != "neutral")] | length' <<<"$json")
+    [ "$count" -gt 0 ] || waiting_no_checks "$sha"
 
     merge=$(jq -r '(.mergeStateStatus // "") | ascii_downcase' <<<"$json")
-    [ "$merge" != dirty ] || blocked conflict
+    [ "$merge" != dirty ] || blocked conflict "$sha"
 
     # shellcheck disable=SC2016  # jq program: $c is a jq variable, not shell
     checks=$(jq -r '
@@ -104,7 +140,7 @@ case $forge in
       | if any($c[]; . == "failure" or . == "error" or . == "cancelled" or . == "timed_out" or . == "action_required") then "failure"
         elif all($c[]; . == "success" or . == "neutral" or . == "skipped") then "success"
         else "pending" end' <<<"$json")
-    [ "$checks" != failure ] || blocked checks-failed
+    [ "$checks" != failure ] || blocked checks-failed "$sha"
 
     # Always pin the head commit, so a push landing between the gate and the
     # merge cannot slip through unchecked. --auto is only safe here because
@@ -114,7 +150,7 @@ case $forge in
     args+=(--"$auto_merge" --match-head-commit "$sha")
     out=$(cd "$siding" && gh "${args[@]}" 2>&1) && rc=0 || rc=$?
     [ "$rc" -eq 0 ] && arm "$sha"
-    unavailable "$(printf '%s\n' "$out" | head -n1)"
+    unavailable "$(printf '%s\n' "$out" | head -n1)" "$sha"
     ;;
   gitlab)
     n=$(ry_pr_number "$url")
@@ -139,17 +175,28 @@ case $forge in
     case $state in opened) ;; *) skipped "$state" ;; esac
 
     mr_sha=$(jq -r '.sha' <<<"$json")
+    if [ -n "$armed" ]; then
+      # A push resets merge-when-pipeline-succeeds on GitLab by itself, so
+      # there is nothing to disable — only to notice and re-gate.
+      [ "$armed" != "$mr_sha" ] || { printf 'auto-merge=armed sha=%s\n' "$mr_sha"; exit 0; }
+      disarmed "$mr_sha"
+    fi
+
+    pstatus=$(jq -r '(.head_pipeline.status // "") | ascii_downcase' <<<"$json")
     pipeline_sha=$(jq -r '.head_pipeline.sha // ""' <<<"$json")
-    [ -n "$pipeline_sha" ] && [ "$pipeline_sha" = "$mr_sha" ] || waiting_no_checks
+    # A pipeline for an older sha is not a check on this head; and "skipped" or
+    # "manual" is a pipeline that will never report, which GitLab's auto-merge
+    # reads as nothing pending.
+    { [ -n "$pipeline_sha" ] && [ "$pipeline_sha" = "$mr_sha" ] &&
+      [ "$pstatus" != skipped ] && [ "$pstatus" != manual ]; } || waiting_no_checks "$mr_sha"
 
     merge=$(jq -r '(.detailed_merge_status // "") | ascii_downcase
       | if   . == "mergeable" or . == "can_be_merged" then "clean"
         elif . == "conflict" or . == "broken_status" or . == "cannot_be_merged" then "dirty"
         else "other" end' <<<"$json")
-    [ "$merge" != dirty ] || blocked conflict
+    [ "$merge" != dirty ] || blocked conflict "$mr_sha"
 
-    pstatus=$(jq -r '(.head_pipeline.status // "") | ascii_downcase' <<<"$json")
-    case $pstatus in failed | canceled) blocked checks-failed ;; esac
+    case $pstatus in failed | canceled) blocked checks-failed "$mr_sha" ;; esac
 
     # --yes is mandatory on every glab merge call: without it glab prompts for
     # confirmation, which is the same trap `ddev delete` fell into once.
@@ -162,13 +209,15 @@ case $forge in
     while :; do
       out=$(cd "$siding" && glab "${args[@]}" 2>&1) && rc=0 || rc=$?
       [ "$rc" -eq 0 ] && arm "$mr_sha"
-      case $out in *405* | *"Method Not Allowed"*)
-        [ "$attempt" -lt "$tries" ] || waiting_checking
+      # Matched narrowly: a bare *405* also matches MR !405, a sha fragment or
+      # a byte count, and would turn a real failure into a silent retry.
+      case $out in *"Method Not Allowed"* | *": 405"* | *"405:"*)
+        [ "$attempt" -lt "$tries" ] || waiting_checking "$mr_sha"
         attempt=$((attempt + 1))
         sleep "$sleep_s"
         continue ;;
       esac
-      unavailable "$(printf '%s\n' "$out" | head -n1)"
+      unavailable "$(printf '%s\n' "$out" | head -n1)" "$mr_sha"
     done
     ;;
 esac

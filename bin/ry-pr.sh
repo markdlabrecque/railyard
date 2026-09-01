@@ -20,7 +20,9 @@ while [ $# -gt 0 ]; do
   case $1 in
     --title) title=${2:-}; shift;;
     --auto-merge) auto_merge=1;;
-    --auto-merge-method) auto_merge_method=${2:-}; auto_merge_method_given=1; shift;;
+    --auto-merge-method)
+      [ $# -ge 2 ] || ry_die "--auto-merge-method needs a value (merge, squash or rebase)"
+      auto_merge_method=$2; auto_merge_method_given=1; shift;;
     -*) ry_die "unknown flag $1";;
     *) id=$1;;
   esac; shift
