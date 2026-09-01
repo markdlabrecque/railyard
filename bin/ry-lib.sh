@@ -40,10 +40,62 @@ ry_require() {  # <cmd>...: die naming everything missing, not just the first
   ry_die "railyard needs ${missing[*]}, and $([ ${#missing[@]} -eq 1 ] && echo "it is" || echo "they are") not on PATH. Install with 'brew install ${missing[*]}' or 'apt install ${missing[*]}'."
 }
 
-ry_new_id() {  # <project> -> e.g. xyz-0830-1412-3f9a
-  local p=$1 rand
-  rand=$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')
-  printf '%s-%s-%s\n' "$p" "$(date +%m%d-%H%M)" "$rand"
+# --- task ids ---------------------------------------------------------------
+# A task id is how the dispatcher names the work, so it reads like the work:
+# `<ticket>-<slug>` when there is a ticket, the slug alone when there is not.
+# No project, no timestamp, no random bytes -- the project is in the task's
+# meta, and a date says nothing anyone wants to read back.
+
+RY_SLUG_WORDS=5    # words kept from the description
+RY_SLUG_MAX=40     # characters, cut at a word boundary
+
+ry_slugify() {  # <text> -> a short lowercase hyphenated slug
+  # Deliberately dumb: first line, lowercased, ticket references dropped,
+  # everything that is not a letter or a digit becomes a hyphen, first few
+  # words kept. Predictable beats clever -- whoever dispatches should be able
+  # to guess the id before they read it back.
+  local s
+  s=$(printf '%s\n' "$1" | head -n 1 \
+      | LC_ALL=C tr '[:upper:]' '[:lower:]' \
+      | LC_ALL=C sed -e 's/#[0-9][0-9]*//g' \
+                     -e 's/[^a-z0-9][^a-z0-9]*/-/g' \
+                     -e 's/^-//' -e 's/-$//')
+  s=$(printf '%s\n' "$s" | cut -d- -f"1-$RY_SLUG_WORDS")
+  if [ ${#s} -gt $RY_SLUG_MAX ]; then s=${s:0:$RY_SLUG_MAX}; s=${s%-*}; fi
+  s=${s%-}
+  [ -n "$s" ] || s=task
+  printf '%s\n' "$s"
+}
+
+ry_ticket_ref() {  # <text> -> the first #N in its first line, without the #
+  # No match is the common case, not a failure: grep's exit 1 would take a
+  # caller running under `set -euo pipefail` down with it.
+  printf '%s\n' "$1" | head -n 1 | grep -o '#[0-9][0-9]*' | head -n 1 | tr -d '#' || true
+}
+
+ry_id_taken() {  # <id>: is anything already using this id, live or archived
+  # Every place an id leaves a mark: live state, the archive a decoupled task
+  # keeps, and the sidings themselves. Checked under set -e, so no bare
+  # `[ ... ] && return` -- a false test there would abort the caller.
+  local home d; home=$(ry_home)
+  if [ -e "$home/state/$1.meta" ] || [ -e "$home/state/$1.status" ] \
+     || [ -e "$home/state/archive/$1" ]; then return 0; fi
+  for d in "$home"/yard/*/"$1"; do
+    if [ -e "$d" ]; then return 0; fi
+  done
+  return 1
+}
+
+ry_new_id() {  # <ticket> <slug> -> a free task id, e.g. 3-fixtures-start-script
+  # Two tasks on one ticket is normal -- a first attempt and a retry, a ticket
+  # split in two -- so the second one gets a counter and nothing else. Boring
+  # on purpose: -2 is readable, and a reader can tell at a glance which of the
+  # two came first.
+  local ticket=$1 slug=$2 base id n=2
+  base=$slug; [ -z "$ticket" ] || base="$ticket-$slug"
+  id=$base
+  while ry_id_taken "$id"; do id="$base-$n"; n=$((n + 1)); done
+  printf '%s\n' "$id"
 }
 
 ry_project_dir() {  # <name> -> projects/<name>, must be a git repo
@@ -134,6 +186,26 @@ ry_ddev_name() {  # <prefix> <project> -> the name, or 1 when it does not fit
   local n="$1-$2"
   [ ${#n} -le $RY_DDEV_NAME_MAX ] || return 1
   printf '%s\n' "$n"
+}
+
+ry_ddev_default_prefix() {  # <id> <project> -> the DDEV prefix for a task with no --prefix
+  # The task id itself. It is unique by construction, it is stable for the life
+  # of the task, and it is already a valid hostname label, so it is the only
+  # honest default: two sidings can never end up sharing a DDEV project.
+  #
+  # The old default -- the id's last hyphenated field -- was two random bytes.
+  # Under a slug id that field is the last word of the description, so
+  # `news-filter-styling` and `homepage-styling` would both ask for
+  # `styling-<project>` and fight over one DDEV project.
+  #
+  # When `<id>-<project>` will not fit a 63-character hostname label, fall back
+  # to a short digest of the id: still unique, still stable, and recomputable
+  # from the id alone, which is what ry-couple.sh needs for a meta that has no
+  # prefix line. Truncating the id instead would collide, since two ids on one
+  # ticket share their leading characters.
+  local id=$1 project=$2
+  if ry_ddev_name "$id" "$project" >/dev/null; then printf '%s\n' "$id"; return; fi
+  printf 'ry%s\n' "$(printf '%s' "$id" | git hash-object --stdin | cut -c1-8)"
 }
 
 ry_ddev_name_too_long() {  # <prefix> <project>: message for a name that will not fit
