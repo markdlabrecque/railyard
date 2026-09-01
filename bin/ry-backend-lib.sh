@@ -51,7 +51,13 @@ ry_backend_check() {
 
 ry_backend_open() {  # <id> <siding> <command> -> target
   case $(ry_backend) in
-    tmux) ry_tmux_open_window "ry-$1" "$2" "$3"; printf 'ry-%s\n' "$1" ;;
+    # `&&`, not `;`: a `;` is a sequencer, not a guard, so a failed
+    # ry_tmux_open_window would still fall through to print 'ry-<id>' as if
+    # it had opened -- and inherit_errexit is off, so that failure inside
+    # `target=$(ry_backend_open ...)` is swallowed rather than propagated to
+    # the caller. Every other backend arm here already dies loudly on its
+    # own failure; tmux was the one silent path to a lying `target=`.
+    tmux) ry_tmux_open_window "ry-$1" "$2" "$3" && printf 'ry-%s\n' "$1" ;;
     orca) ry_orca_ensure_repo "$(ry_project_dir "$(ry_meta_get "$1" project)")"
           ry_orca_open "ry-$1" "$2" "$3" ;;
     cmux) ry_cmux_open "ry-$1" "$2" "$3" ;;

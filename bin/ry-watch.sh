@@ -43,6 +43,13 @@ pass() {
     status=$(cat "$f")
     id=${f##*/}; id=${id%.status}
     if [ "$status" = queued ]; then
+      # A launch that already failed here once left this sentinel (see
+      # ry-couple.sh). Auto-coupling it again every pass would cut the
+      # worktree, rerun the project's start script and burn another 3 Orca
+      # retries -- unbounded, one inbox line and terminal nudge per pass,
+      # for a failure that has not gone anywhere. It stays queued and out of
+      # this loop until a human clears it with a manual ry-couple.sh.
+      [ ! -e "$st/$id.launch-failed" ] || continue
       deps=$("$bindir/ry-deps.sh" "$id" 2>>"$st/watch.log" || true)
       case $deps in
         state=ready*)
