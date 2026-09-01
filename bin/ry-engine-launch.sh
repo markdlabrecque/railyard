@@ -43,7 +43,11 @@ cmd+="$engine_cmd --settings $(printf %q "$settings") $(printf %q "$prompt")"
 ry_claude_trust "$siding"
 
 ry_backend_check; ry_backend_no_split
-target=$(ry_backend_open "$id" "$siding" "$cmd")
+# All-or-nothing: a terminal that never opens must leave no trace in the
+# meta or status, so the caller (ry-couple.sh) can tell a real launch from a
+# failed one and roll the rest of the task back rather than leave it running
+# nowhere.
+target=$(ry_backend_open "$id" "$siding" "$cmd") || ry_die "could not open a terminal for $id"
 printf 'backend=%s\ntarget=%s\n' "$(ry_backend)" "$target" >> "$home/state/$id.meta"
 ry_set_status "$id" running
 printf 'launched %s\n' "$id"

@@ -82,7 +82,21 @@ if [ "$start_rc" -ne 0 ]; then
 fi
 
 if [ "$(ry_backend)" != none ]; then
-  "$(dirname "$0")/ry-engine-launch.sh" "$id" >/dev/null
+  if ! "$(dirname "$0")/ry-engine-launch.sh" "$id" >/dev/null; then
+    # The terminal never opened. Nothing half-cut: undo the worktree exactly
+    # as the ddev-override failure above does, and put the task back to
+    # queued rather than leaving it stranded in `dispatched`. Its meta and
+    # waybill survive -- this is a task the dispatcher already knows about
+    # (queued behind a blocker, most likely), and re-coupling it is the
+    # recovery, so there is nothing here worth throwing away.
+    git -C "$pdir" worktree remove --force "$siding" 2>/dev/null || true
+    git -C "$pdir" worktree prune
+    git -C "$pdir" branch -q -D "$branch" 2>/dev/null || true
+    ry_set_status "$id" queued
+    ry_event "$id" "launch-failed could not open a terminal for $id"
+    printf 'error: could not launch %s; siding rolled back, %s is queued again\n' "$id" "$id" >&2
+    exit 1
+  fi
 fi
 printf 'coupled %s to %s (from %s)\n' "$id" "$siding" "$start"
 [ -z "$ddev_name" ] || printf 'ddev=%s\n' "$ddev_name"

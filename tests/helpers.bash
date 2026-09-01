@@ -95,6 +95,11 @@ setup_cmux() {
 setup_orca() {
   export RY_BACKEND=orca
   export RY_FAKE_ORCA_LOG="$BATS_TEST_TMPDIR/orca.log" RY_FAKE_ORCA_REPOS="$BATS_TEST_TMPDIR/orca-repos.json"
+  export RY_FAKE_ORCA_WORKTREES="$BATS_TEST_TMPDIR/orca-worktrees.txt"
+  export RY_FAKE_ORCA_CREATE_COUNTER="$BATS_TEST_TMPDIR/orca-create-counter"
+  rm -f "$RY_FAKE_ORCA_CREATE_COUNTER"
+  # Real orca's retry sleep is a few real seconds; tests never wait for it.
+  export RY_ORCA_RETRY_SLEEP=0
   export PATH="$BATS_TEST_DIRNAME/fakebin:$PATH"
 }
 

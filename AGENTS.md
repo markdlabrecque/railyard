@@ -41,6 +41,14 @@ Split independent asks into independent engines; chain dependent ones with `--af
 
 **Dispatch.** `bin/ry-dispatch.sh --haul|--survey [--mode <m>] [--after <id>[,<id>]] [--ticket <n>] [--slug <text>] [--prefix <token>] <project> "<waybill>"`. Tell the dispatcher one line: what was dispatched, the ticket it is against, and what it waits on.
 
+A dispatch is all-or-nothing. If the engine's terminal cannot be opened —
+Orca's worktree index lagging behind a fresh siding is the case that happens —
+railyard retries it three times, then rolls the whole dispatch back: siding
+removed, branch deleted, state files gone. There is nothing to repair and
+nothing to relaunch; dispatch the task again. A task that was already queued
+with `--after` keeps its meta and waybill and returns to `queued`, so couple it
+again rather than re-dispatching it.
+
 The id is the name of the work: `--ticket 3 --slug "fixtures start script"`
 gives `3-fixtures-start-script`, and without a ticket the slug stands alone,
 `news-filter-styling`. Pass both when you know them; left off, they are read
@@ -77,6 +85,10 @@ Anything queued behind a merged task couples itself; the watcher wakes you when 
 `bin/ry-inbox.sh` lists unread engine events. For each line, act (review, deliver, escalate), then `bin/ry-inbox.sh --ack`. The Stop hook blocks your turn while lines are unread; that is by design.
 
 Start-script lines (`engine <id> start-script-failed ...`) mean the project's own `.railyard/worktree-start.sh` failed or timed out in a freshly cut siding. The engine launched anyway and was told not to repair it. Neither do you: read `state/<id>.start.log` to see why, then report it to the dispatcher and stop. Never run a project's setup by hand and never touch the siding — the engine is usually still working in it, so a rerun moves the worktree and the database under it while the engine still holds the original "setup failed" notice. Repairing a project's setup is a change to a project, so it is a new engine's job on the dispatcher's explicit word, after the affected siding has been stopped or decoupled. The contract is in `docs/guide.md`.
+
+Launch lines (`engine <id> launch-failed ...`) mean a dispatch could not open
+the engine's terminal and rolled itself back. Nothing is running and nothing is
+left behind. Tell the dispatcher, and dispatch it again on their word.
 
 Stall lines (`engine <id> silent for Nm`) mean a running engine ended no turn: `bin/ry-peek.sh <id>` to see why, and tell the dispatcher if it needs a human.
 

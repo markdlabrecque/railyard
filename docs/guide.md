@@ -112,6 +112,12 @@ again. Put it in your shell profile if Orca is your normal way to work.
 Each engine gets its own Orca terminal titled `ry-<id>`, opened on its siding as
 an external worktree. Decoupling stops that terminal.
 
+Orca resolves that siding against its own worktree index, which it builds
+asynchronously, so a siding cut seconds earlier can still be unknown to it.
+Railyard retries the terminal three times over a few seconds, which is more
+than the race has ever needed. If all three miss, the dispatch fails as a
+whole: see [When a dispatch fails](#when-a-dispatch-fails).
+
 Nothing about the daily loop changes. The only differences:
 
 | | tmux | Orca | cmux | herdr |
@@ -485,6 +491,22 @@ that enforces it — the engine preamble, `AGENTS.md`, a project's line in
 `data/projects.md`, a check in a script — or dropped. Promotions need your word,
 so you see the whole queue before anything goes. Nothing accumulates, and
 nothing is carried forward undecided.
+
+## When a dispatch fails
+
+Cutting the siding and opening the engine's terminal are one step, not two. If
+the terminal cannot be opened, `bin/ry-dispatch.sh` rolls the whole dispatch
+back: the worktree is removed, its `ry/<id>` branch is deleted, and the task's
+`state/` files go with it. Nothing half-built is left behind, so a dispatch
+either produced a running engine or produced nothing.
+
+You are told plainly, and the failure is also an inbox line, so it is never a
+dispatch that merely looked quiet. The recovery is to dispatch the task again —
+there is no siding left to launch into.
+
+A task that was already queued (`--after`) is the one exception. Its meta and
+waybill survive, because you already know about that task; only its siding is
+rolled back and it goes back to `queued`, ready to be coupled again.
 
 ## When something goes wrong
 

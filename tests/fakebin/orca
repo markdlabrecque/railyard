@@ -5,7 +5,47 @@ case "$1 $2" in
   "status --json") echo '{"ok":true,"result":{"runtime":{"state":"ready","reachable":true}}}' ;;
   "repo list") printf '{"ok":true,"result":{"repos":[%s]}}\n' "$(cat "${RY_FAKE_ORCA_REPOS:-/dev/null}" 2>/dev/null)" ;;
   "repo add") echo '{"ok":true,"result":{"repo":{"id":"repo-1"}}}' ;;
-  "terminal create") echo '{"ok":true,"result":{"terminal":{"handle":"term_fake_'"$RANDOM"'","surface":"visible"}}}' ;;
+  "worktree list")
+    # Real `orca worktree list --json` answers
+    # {"ok":true,"result":{"worktrees":[{"id":...,"path":...}, ...]}}.
+    # Paths come from a newline-separated file at RY_FAKE_ORCA_WORKTREES,
+    # empty (no worktrees) by default, matching the freshly-cut siding a
+    # just-created worktree has not yet been indexed for.
+    rows=""
+    if [ -n "${RY_FAKE_ORCA_WORKTREES:-}" ] && [ -f "$RY_FAKE_ORCA_WORKTREES" ]; then
+      while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        [ -z "$rows" ] || rows+=","
+        rows+='{"id":"repo-1::'"$p"'","path":"'"$p"'"}'
+      done < "$RY_FAKE_ORCA_WORKTREES"
+    fi
+    printf '{"ok":true,"result":{"worktrees":[%s]}}\n' "$rows"
+    ;;
+  "terminal create")
+    # RY_FAKE_ORCA_CREATE_ERROR: always fail with a given (non-retryable)
+    # error code -- exercises the "do not retry this" path.
+    if [ -n "${RY_FAKE_ORCA_CREATE_ERROR:-}" ]; then
+      printf '{"ok":false,"error":{"code":"%s","message":"%s"}}\n' \
+        "$RY_FAKE_ORCA_CREATE_ERROR" "$RY_FAKE_ORCA_CREATE_ERROR"
+      exit 1
+    fi
+    # RY_FAKE_ORCA_CREATE_FAILS=<n>: fail the first n calls with
+    # selector_not_found (Orca's real error when its worktree index has not
+    # caught up with a just-created siding yet), then succeed. The count
+    # persists in RY_FAKE_ORCA_CREATE_COUNTER across separate `orca`
+    # invocations, since each `terminal create` is its own process.
+    if [ -n "${RY_FAKE_ORCA_CREATE_FAILS:-}" ] && [ "${RY_FAKE_ORCA_CREATE_FAILS}" -gt 0 ]; then
+      counter="${RY_FAKE_ORCA_CREATE_COUNTER:-${BATS_TEST_TMPDIR:-/tmp}/orca-create-counter}"
+      count=$(cat "$counter" 2>/dev/null || echo 0)
+      if [ "$count" -lt "$RY_FAKE_ORCA_CREATE_FAILS" ]; then
+        count=$((count + 1))
+        printf '%s' "$count" > "$counter"
+        echo '{"ok":false,"error":{"code":"selector_not_found","message":"selector_not_found"}}'
+        exit 1
+      fi
+    fi
+    echo '{"ok":true,"result":{"terminal":{"handle":"term_fake_'"$RANDOM"'","surface":"visible"}}}'
+    ;;
   "terminal stop") echo '{"ok":true,"result":{"stopped":1}}' ;;
   "terminal send") echo '{"ok":true,"result":{}}' ;;
   "terminal read") echo '{"ok":true,"result":{"terminal":{"status":"running","tail":["line one","line two"]}}}' ;;
