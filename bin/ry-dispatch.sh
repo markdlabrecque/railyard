@@ -153,7 +153,7 @@ else
     if [ -e "$home/state/$id.launch-failed" ]; then
       rm -f "$home/state/$id.meta" "$home/state/$id.status" "$home/state/$id.waybill.md" \
             "$home/state/$id.settings.json" "$home/state/$id.setup-failed.md" \
-            "$home/state/$id.launch-failed"
+            "$home/state/$id.start.log" "$home/state/$id.launch-failed"
       rm -rf "$home/data/$id"
       printf 'FAILED: dispatch of %s could not launch an engine; everything written for it has been rolled back. Fix the backend and dispatch again -- there is nothing to recover, this attempt left no trace.\n' "$id" >&2
     else

@@ -60,29 +60,32 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; . "$BATS_TEST_DIRNAME/../bin/ry
   [ "$(grep -c -- 'terminal create' "$RY_FAKE_ORCA_LOG")" -eq 1 ]
 }
 
-@test "RY_ORCA_RETRY_SLEEP overrides the retry sleep (0 is fast, unset is a real sleep)" {
+@test "RY_ORCA_RETRY_SLEEP is what the retry waits, and 2 seconds is the default" {
   export RY_FAKE_ORCA_CREATE_FAILS=1
+  export RY_FAKE_SLEEP_LOG="$BATS_TEST_TMPDIR/sleep.log"
   siding="$RY_HOME/yard/xyz/timing"
   mkdir -p "$siding"
+  # A fake sleep that records its argument rather than honouring it: the point
+  # is which interval the code asks for, and timing the machine to find out
+  # would flake whenever a zero-sleep retry crossed a one-second boundary.
+  export PATH="$BATS_TEST_DIRNAME/fakebin-sleep:$PATH"
 
-  start=$(date +%s)
+  : > "$RY_FAKE_SLEEP_LOG"
   RY_ORCA_RETRY_SLEEP=0 bash -c "
     . '$BATS_TEST_DIRNAME/../bin/ry-lib.sh'
     . '$BATS_TEST_DIRNAME/../bin/ry-orca-lib.sh'
     ry_orca_open ry-timing-fast '$siding' true
   " >/dev/null
-  fast=$(( $(date +%s) - start ))
-  [ "$fast" -lt 1 ]
+  [ "$(cat "$RY_FAKE_SLEEP_LOG")" = 0 ]
 
   rm -f "$RY_FAKE_ORCA_CREATE_COUNTER"
-  start=$(date +%s)
+  : > "$RY_FAKE_SLEEP_LOG"
   env -u RY_ORCA_RETRY_SLEEP bash -c "
     . '$BATS_TEST_DIRNAME/../bin/ry-lib.sh'
     . '$BATS_TEST_DIRNAME/../bin/ry-orca-lib.sh'
     ry_orca_open ry-timing-slow '$siding' true
   " >/dev/null
-  slow=$(( $(date +%s) - start ))
-  [ "$slow" -ge 1 ]
+  [ "$(cat "$RY_FAKE_SLEEP_LOG")" = 2 ]
 }
 
 # --- happy path through dispatch (point 2) ----------------------------------
@@ -254,4 +257,23 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; . "$BATS_TEST_DIRNAME/../bin/ry
   [ "$status" -eq 0 ]
   [ ! -f "$RY_HOME/state/$b.launch-failed" ]
   [ "$(cat "$RY_HOME/state/$b.status")" = "running" ]
+}
+
+# The rollback message claims the attempt left no trace, so a start.log from a
+# start script that failed just before the launch did must go with the rest.
+@test "orca dispatch: the rollback takes the start script's log too" {
+  make_start_script xyz <<'EOF'
+#!/usr/bin/env bash
+echo "setup blew up"
+exit 1
+EOF
+  export RY_FAKE_ORCA_CREATE_FAILS=99
+  run ry-dispatch.sh --haul xyz "fix it"
+  [ "$status" -ne 0 ]
+  id=$(sed -n 's/^id=//p' <<<"$output")
+  [ -n "$id" ]
+
+  [ ! -f "$RY_HOME/state/$id.start.log" ]
+  [ ! -f "$RY_HOME/state/$id.setup-failed.md" ]
+  [ ! -f "$RY_HOME/state/$id.meta" ]
 }
