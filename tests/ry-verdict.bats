@@ -223,3 +223,66 @@ EOF
   [[ "$output" == *"must-fix"* ]]
 }
 
+# --- the skip is checked against the diff, not taken on trust ----------------
+
+siding_commit() {  # <id> <path> — commit one file into the task's siding
+  local siding; siding="$RY_HOME/yard/xyz/$1"
+  git -C "$siding" config user.email e@e; git -C "$siding" config user.name e
+  mkdir -p "$(dirname "$siding/$2")"; echo change > "$siding/$2"
+  git -C "$siding" add -A; git -C "$siding" commit -qm "touch $2"
+}
+
+@test "a skipped inspector is accepted when the diff really is documentation only" {
+  A=$(ry-dispatch.sh --haul xyz "tidy the readme" | sed -n 's/^id=//p')
+  siding_commit "$A" docs/guide.md
+  well_formed_block | sed 's/^- inspector:.*/- inspector: not run (doc-only haul, 6 lines)/' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 0 ]
+}
+
+@test "a skipped inspector is rejected when the diff touches code" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  siding_commit "$A" bin/thing.sh
+  well_formed_block | sed 's/^- inspector:.*/- inspector: not run (simple change)/' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"inspector"* ]]
+  [[ "$output" == *"bin/thing.sh"* ]]
+}
+
+@test "a skipped inspector is rejected when the diff touches tests" {
+  A=$(ry-dispatch.sh --haul xyz "add coverage" | sed -n 's/^id=//p')
+  siding_commit "$A" tests/ry-thing.bats
+  well_formed_block | sed 's/^- inspector:.*/- inspector: not run (only a test)/' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"tests/ry-thing.bats"* ]]
+}
+
+@test "a skipped inspector is rejected on a mixed diff, naming the code file" {
+  A=$(ry-dispatch.sh --haul xyz "docs and code" | sed -n 's/^id=//p')
+  siding_commit "$A" README.md
+  siding_commit "$A" bin/other.sh
+  well_formed_block | sed 's/^- inspector:.*/- inspector: not run (mostly docs)/' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"bin/other.sh"* ]]
+}
+
+@test "an inspector that ran is not checked against the diff at all" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  siding_commit "$A" bin/thing.sh
+  well_formed_block > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 0 ]
+}
+
+@test "a gone siding warns rather than failing a handoff it cannot check" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  well_formed_block | sed 's/^- inspector:.*/- inspector: not run (doc-only haul)/' > "$RY_HOME/state/$A.last.md"
+  rm -rf "$RY_HOME/yard/xyz/$A"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cannot be checked"* ]]
+}
+

@@ -37,7 +37,7 @@ The SessionStart hook claimed the yard, started the watcher and printed the summ
 - order: a task that cannot start until another has landed names it as a **blocker** with `--after <id>`. It waits as `queued`, and the watcher couples it once every blocker is merged.
 Split independent asks into independent engines; chain dependent ones with `--after`.
 
-**Waybill.** Write the task for the engine: goal, acceptance criteria, constraints, files or areas to look at, what "verified" means. The preamble already covers commit/push/handoff rules; write only the task. Name the suspected weakness — the assertion you expect to be soft, the edge case you expect to be missed, the file you expect to be forgotten. The engine hands that line to its inspector, and an inspector told only "review this diff" finds nothing.
+**Waybill.** Write the task for the engine: goal, acceptance criteria, constraints, files or areas to look at, what "verified" means. The preamble already covers commit/push/handoff rules; write only the task. Name the suspected weakness — the assertion you expect to be soft, the edge case you expect to be missed, the file you expect to be forgotten. The engine hands that line to its inspector, and an inspector told only "review this diff" finds nothing. Nothing can refuse a waybill that omits it, so the engine is told to flag the omission in its handoff instead: a handoff that says the waybill named no weakness is a note to you, not to it.
 
 **Dispatch.** `bin/ry-dispatch.sh --haul|--survey [--mode <m>] [--after <id>[,<id>]] [--ticket <n>] [--slug <text>] [--prefix <token>] <project> "<waybill>"`. Tell the dispatcher one line: what was dispatched, the ticket it is against, and what it waits on.
 

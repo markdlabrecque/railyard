@@ -6,10 +6,9 @@ disable-model-invocation: true
 
 The research is the expensive half, so a subagent does it. Filing is
 outward-facing and lands in the dispatcher's repository under their name, so
-**you file, always** — the subagent drafts and never posts. This skill governs
-anything filed from the yard, on either host; it cites
-`~/.claude/skills/gitlab-tickets/SKILL.md` for GitLab body style only, and
-overrides that skill's instruction to file directly.
+**you file, always** — the subagent drafts and never posts. This skill is
+self-contained and governs anything filed from the yard, on either host. Where
+another ticket-filing skill says to post without asking, this one wins.
 
 ## 1. Decide whether to delegate at all
 
@@ -66,13 +65,33 @@ Item 4 is load-bearing, and it is the same idea as an engine's inspection
 block: you accept on a checkable claim rather than by re-reading the artifact.
 "I could not confirm X" is worth more than a confident body.
 
-## 5. File it
+## 5. Host differences the draft has to respect
+
+**GitLab.** Check `ls .gitlab/issue_templates/` first: when a template fits
+(`Bug.md`, `Task.md`), its headings are the agreed shape and they replace the
+house style above. Fill every section it defines; one with nothing to say gets
+an explicit `None`, never the placeholder text. Reference siblings as bare
+`#305` — GitLab links them. `glab` has no body-file flag, so the body is passed
+as `-d "$(cat <body-file>)"`.
+
+**GitHub.** No templates to check for railyard's own repos. `gh` does take a
+body file, `-F`. A pull request is `#N` in issue text, so the autolink works.
+
+## 6. File it
 
 Skim the title and opening paragraph the way a human would — that skim is only
-possible before the post — then:
+possible before the post. Check the one CLI you are about to use is present,
+not both:
 
-- GitHub: `gh issue create -R <owner/repo> -t "<title>" -F <body-file> -l <labels>`
-- GitLab: `glab issue create -R <owner/repo> -t "<title>" -F <body-file> -l <labels>`
+```
+command -v gh   >/dev/null || { echo "gh is not on PATH"; exit 1; }
+gh issue create -R <owner/repo> -t "<title>" -F <body-file> -l <labels>
+```
+
+```
+command -v glab >/dev/null || { echo "glab is not on PATH"; exit 1; }
+glab issue create -y --no-editor -R <owner/repo> -t "<title>" -d "$(cat <body-file>)" -l <labels>
+```
 
 Report the ticket to the dispatcher as `#N` with the full URL, plus the one
 line the subagent could not confirm.

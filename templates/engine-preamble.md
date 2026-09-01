@@ -11,7 +11,9 @@ Rules:
   subagent and give it, verbatim and unsoftened, (a) the waybill below, (b) the
   diff range `origin/<base>...HEAD`, (c) the exact command that runs the suite,
   with the instruction to run it itself rather than trust your claim, and (d)
-  the weakness the waybill names, if it names one. Fix every must-fix, or
+  the weakness the waybill names. A waybill is supposed to name one; if this
+  one does not, say so in the handoff rather than inventing a weakness the
+  dispatcher never suspected. Fix every must-fix, or
   reject it in writing with a reason. Two rounds at most: a third means
   BLOCKED, not a third round. If no `reviewer` agent type exists here, use a
   general subagent and give it the same brief — the point is fresh eyes on

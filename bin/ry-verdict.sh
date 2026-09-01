@@ -47,6 +47,32 @@ get_field() {  # <key> -> its value, from $block
 }
 
 not_run_re='^not run \([^)]+\)$'
+
+# The skip is only for a documentation-only haul, so the claim is checked
+# against the diff rather than taken on trust: a reason in parentheses is free
+# text, and a guard that accepts any excuse is not a guard. Prints the first
+# changed path that is not documentation. When the siding is gone the diff
+# cannot be read at all; that is said on stderr and allowed to pass, because by
+# then the review it would have gated has already happened.
+nondoc_change() {
+  local siding base out f
+  siding=$(ry_meta_get "$id" siding); base=$(ry_meta_get "$id" base)
+  if [ -z "$siding" ] || [ ! -d "$siding" ]; then
+    printf 'warning: siding for %s is gone; the "not run" claim cannot be checked against the diff\n' "$id" >&2
+    return 0
+  fi
+  if ! out=$(git -C "$siding" diff --name-only "origin/$base...HEAD" -- 2>/dev/null); then
+    printf 'warning: no diff against origin/%s; the "not run" claim cannot be checked\n' "$base" >&2
+    return 0
+  fi
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    case $f in *.md|*.txt|docs/*|LICENSE) continue ;; esac
+    printf '%s\n' "$f"
+    return 0
+  done <<< "$out"
+  return 0
+}
 bad=()
 for key in inspector suite must-fix "revert check" risk; do
   val=$(get_field "$key")
@@ -56,7 +82,13 @@ for key in inspector suite must-fix "revert check" risk; do
   fi
   case $key in
     inspector)
-      if [ "$val" != ran ] && ! [[ $val =~ $not_run_re ]]; then
+      if [ "$val" = ran ]; then
+        :
+      elif [[ $val =~ $not_run_re ]]; then
+        offender=$(nondoc_change)
+        [ -z "$offender" ] ||
+          bad+=("inspector (skipped, but the diff touches $offender)")
+      else
         bad+=("$key")
       fi
       ;;
