@@ -23,7 +23,12 @@ for status in queued running turn-ended pr-open merged dispatched; do
     [ -f "$f" ] || continue
     [ "$(cat "$f")" = "$status" ] || continue
     id=${f##*/}; id=${id%.status}
-    line="  $id  $(ry_meta_get "$id" project)  $(ry_meta_get "$id" shape)  $(ry_meta_get "$id" mode)  $(age_of "$f")"
+    # The ticket leads when the task has one: it is the identifier the
+    # dispatcher tracks work by. The id follows because it is what the
+    # bin/ scripts take.
+    label=$id; ticket=$(ry_meta_get "$id" ticket)
+    [ -z "$ticket" ] || label="#$ticket  $id"
+    line="  $label  $(ry_meta_get "$id" project)  $(ry_meta_get "$id" shape)  $(ry_meta_get "$id" mode)  $(age_of "$f")"
     url=$(ry_meta_get "$id" pr_url); [ -n "$url" ] && line+="  $url"
     if [ "$status" = queued ]; then
       deps=$("$bindir/ry-deps.sh" "$id" 2>/dev/null || true)

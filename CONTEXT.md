@@ -31,6 +31,13 @@ _Avoid_: crewmate, worker, subagent, child
 One unit of dispatched work. Has exactly one shape, one project, one engine, one
 siding, and one id.
 
+**Id**:
+A task's name, and the one the dispatcher uses: `<ticket>-<slug>` when the work
+has a ticket (`3-fixtures-start-script`), the slug alone when it does not
+(`news-filter-styling`). A second task of the same name gets `-2`. It is the
+siding directory, the branch `ry/<id>`, and every `state/<id>.*` file.
+_Avoid_: task name, slug
+
 **Shape**:
 Whether a task changes code or only reads it — `haul` or `survey`. Fixed at dispatch.
 _Avoid_: kind, type
