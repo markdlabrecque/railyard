@@ -196,3 +196,13 @@ teardown() {
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
+
+# Regression guard for the hermetic environment established in tests/helpers.bash.
+# Inside an engine siding RY_ID and friends are exported into the terminal;
+# without the unset at load time this test fails, and so do the eleven tests
+# above it that drive session start through the real script.
+# RY_HOME and RY_BACKEND are not checked: setup_home always overwrites them.
+@test "the suite runs with no ambient yard environment" {
+  [ -z "${RY_ID:-}" ]
+  [ -z "${RY_BIN:-}" ]
+}

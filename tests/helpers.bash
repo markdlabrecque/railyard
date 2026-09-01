@@ -1,4 +1,14 @@
 # Shared bats helpers for railyard.
+
+# Hermetic environment. Engines export RY_ID, RY_HOME, RY_BIN and RY_BACKEND
+# into their terminal, and bin/ry-session-start.sh correctly stands down when
+# RY_ID is set — so a suite that inherits an engine's environment tests the
+# stand-down path instead of the behaviour it asserts. This runs at `load`
+# time, which is the only seam every test file must pass through: `load
+# helpers` precedes setup(), so it lands before any test body, and a new file
+# cannot forget it the way it could forget setup_home. Tests that need these
+# variables set them themselves, per command.
+unset RY_ID RY_HOME RY_BIN RY_BACKEND
 setup_home() {
   export RY_HOME
   RY_HOME="$(mktemp -d "${BATS_TEST_TMPDIR}/home.XXXX")"
