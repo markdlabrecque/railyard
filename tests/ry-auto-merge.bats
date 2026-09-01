@@ -131,6 +131,26 @@ gl_api() {  # <detailed_merge_status> <head_pipeline-json-or-null>
   [ ! -e "$RY_HOME/state/$ID.auto-armed" ]
 }
 
+@test "github: a stale-only rollup is not a check" {
+  open_gh
+  gh_view CLEAN '{"status":"COMPLETED","conclusion":"STALE"}'
+  run ry-auto-merge.sh "$ID"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"auto-merge=waiting reason=no-checks"* ]]
+  ! grep -q "pr merge" "$RY_FAKE_FORGE_LOG"
+  [ ! -e "$RY_HOME/state/$ID.auto-armed" ]
+}
+
+@test "github: a check that failed to start blocks, it is not pending" {
+  open_gh
+  gh_view CLEAN '{"status":"COMPLETED","conclusion":"STARTUP_FAILURE"}'
+  run ry-auto-merge.sh "$ID"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"auto-merge=blocked reason=checks-failed"* ]]
+  ! grep -q "pr merge" "$RY_FAKE_FORGE_LOG"
+  [ ! -e "$RY_HOME/state/$ID.auto-armed" ]
+}
+
 @test "github: one real check alongside a skipped one does gate through" {
   open_gh
   gh_view CLEAN '{"status":"COMPLETED","conclusion":"SKIPPED"},{"status":"IN_PROGRESS"}'

@@ -136,9 +136,11 @@ case $forge in
     # of the push, long before CI or a reviewer has posted anything: counting
     # that as a check would arm — and, being "all green", merge at once — the
     # very commit nothing has looked at.
+    # "stale" is GitHub's own marker for a check whose verdict no longer
+    # applies, so it is no more a check on this head than a skipped one.
     count=$(jq -r '[.statusCheckRollup[]?
       | (.conclusion // .state // .status // "") | ascii_downcase
-      | select(. != "skipped" and . != "neutral")] | length' <<<"$json")
+      | select(. != "skipped" and . != "neutral" and . != "stale")] | length' <<<"$json")
     [ "$count" -gt 0 ] || waiting_no_checks "$sha"
 
     merge=$(jq -r '(.mergeStateStatus // "") | ascii_downcase' <<<"$json")
@@ -147,7 +149,7 @@ case $forge in
     # shellcheck disable=SC2016  # jq program: $c is a jq variable, not shell
     checks=$(jq -r '
       [.statusCheckRollup[]? | (.conclusion // .state // .status // "") | ascii_downcase] as $c
-      | if any($c[]; . == "failure" or . == "error" or . == "cancelled" or . == "timed_out" or . == "action_required") then "failure"
+      | if any($c[]; . == "failure" or . == "error" or . == "cancelled" or . == "timed_out" or . == "action_required" or . == "startup_failure") then "failure"
         elif all($c[]; . == "success" or . == "neutral" or . == "skipped") then "success"
         else "pending" end' <<<"$json")
     [ "$checks" != failure ] || blocked checks-failed "$sha"

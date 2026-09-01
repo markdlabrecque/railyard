@@ -436,7 +436,7 @@ uncommitted changes each need your explicit word, for that specific task.
 | `pr` | `bin/ry-pr.sh [--auto-merge] <id>` — pushes the branch, opens the PR/MR, then the watcher polls it until it merges and tells you when it is ready to merge (`pr-ready`, with the count and worst severity of the unresolved reviewer findings), when no check ran at all (`pr-no-checks`), when it conflicts (`pr-conflict`), when checks fail, and when it merges |
 | survey | nothing to merge; the findings are the deliverable |
 
-`--auto-merge` (default method `merge`; `--auto-merge-method squash\|rebase` to
+`--auto-merge` (default method `merge`; `--auto-merge-method squash|rebase` to
 change it) opts a `pr` task in to arming the forge's own auto-merge once it is
 safe, instead of you merging it by hand. `ry-pr.sh` only records the choice —
 it never arms anything itself, because a check usually does not exist for
