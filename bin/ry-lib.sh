@@ -199,3 +199,138 @@ ry_ddev_delete() {  # <siding> [<prefix>] [<project>]: never fatal, never blocki
     || printf 'note: ddev delete --omit-snapshot --yes %s failed; that DDEV project may still exist\n' "$name" >&2
   return 0
 }
+
+# --- events -----------------------------------------------------------------
+
+ry_event() {  # <id> <text>: one line on state/events.log
+  # The watcher turns each new line into an inbox line for the yardmaster.
+  # There is exactly one such channel; anything the yardmaster must see without
+  # polling goes through here.
+  local home; home=$(ry_home)
+  printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >> "$home/state/events.log"
+}
+
+# --- worktree start script --------------------------------------------------
+# A project can set up a freshly cut siding for itself: a database, a warmed
+# environment, whatever the engine would otherwise have to improvise. The
+# script is found at a fixed path inside the project repo or not at all --
+# nothing declares it. It runs at couple time, after the DDEV name override so
+# it can reach `ddev`, and before the engine launches.
+#
+# Its contract lives in docs/guide.md ("The worktree start script"). Keep the
+# two in step: whoever writes the first one reads that page and nothing else.
+
+RY_START_SCRIPT=".railyard/worktree-start.sh"
+# The bound, and the fallback when RY_START_TIMEOUT is unusable. Both are
+# overridable so the test suite can prove the watchdog fires without sitting
+# here for ten minutes; there is no reason to set either by hand.
+RY_START_TIMEOUT_DEFAULT=${RY_START_TIMEOUT_DEFAULT:-600}
+
+ry_fixture_dir() {  # <project> -> fixtures/<project>, created if missing
+  local home d; home=$(ry_home); d="$home/fixtures/$1"
+  mkdir -p "$d" || ry_die "could not create $d"
+  printf '%s\n' "$d"
+}
+
+ry_start_outcome=""   # set by ry_run_start_script: "" | "exit N" | "timeout Ns"
+
+# Set ry_start_outcome for the caller (ry-couple.sh) to read; that is a
+# cross-file use, which the linter cannot see.
+# shellcheck disable=SC2034
+ry_run_start_script() {  # <id> <siding> <project>: 1 when the script failed
+  # Returns 0 when there is no script at all (the common case, and nothing is
+  # written), and 0 when the script succeeded. On failure or timeout it returns
+  # 1 with ry_start_outcome set; the caller reports and launches anyway.
+  ry_start_outcome=""
+  local id=$1 siding=$2 project=$3
+  local script="$siding/$RY_START_SCRIPT"
+  [ -f "$script" ] || return 0
+
+  local home bindir log secs pid waited rc monitor backend fixtures
+  home=$(ry_home); log="$home/state/$id.start.log"
+  bindir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+  # A bad bound is worse than no bound: `[ 0 -ge abc ]` errors and stays false,
+  # so the watchdog below would never fire and a hanging script would hold the
+  # coupling open forever -- the one failure the timeout exists to prevent,
+  # reachable by a typo. Fall back to the default, out loud: silently ignoring
+  # what someone typed is how you end up debugging the wrong number.
+  secs=${RY_START_TIMEOUT:-$RY_START_TIMEOUT_DEFAULT}
+  if ! [[ $secs =~ ^[0-9]+$ ]] || [ "$secs" -lt 1 ]; then
+    printf 'note: RY_START_TIMEOUT=%s is not a whole number of seconds of at least 1; using %s\n' \
+      "$secs" "$RY_START_TIMEOUT_DEFAULT" >&2
+    secs=$RY_START_TIMEOUT_DEFAULT
+  fi
+
+  backend=$(ry_backend 2>/dev/null || echo none)
+  fixtures=$(ry_fixture_dir "$project")
+  local -a envv
+  envv=(RY_HOME="$home" RY_ID="$id" RY_BIN="$bindir" RY_BACKEND="$backend"
+        RY_SIDING="$siding" RY_PROJECT="$project" RY_FIXTURE_PATH="$fixtures")
+
+  # Which interpreter runs it. A `#!` line on an executable file is the
+  # project's own choice and is honoured; everything else runs under bash, by
+  # name.
+  #
+  # Naming bash matters. Handing an executable file with no `#!` to exec is not
+  # an error: execvp(3) falls back to running it with /bin/sh, which is bash on
+  # macOS and dash on Debian and Ubuntu. So a shebang-less start script would
+  # get a different shell depending on the machine, and the first bashism in it
+  # would fail on Linux only -- which is exactly how this was found.
+  local first=""
+  local -a runner
+  if [ -x "$script" ] && IFS= read -r first < "$script" && [ "${first#\#!}" != "$first" ]; then
+    runner=("$script")
+  else
+    runner=(bash "$script")
+  fi
+
+  # Job control gives the script its own process group, so a timeout can kill
+  # the whole tree. Without it a hung child of the script would outlive the
+  # kill and keep the log open. `timeout(1)` is GNU coreutils and is not on a
+  # stock macOS, so the bound is a bash watchdog instead.
+  case $- in *m*) monitor=1 ;; *) monitor=0 ;; esac
+  set -m
+  (
+    cd "$siding" || exit 127
+    exec env "${envv[@]}" "${runner[@]}"
+  ) >"$log" 2>&1 &
+  pid=$!
+  [ "$monitor" -eq 1 ] || set +m
+
+  waited=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$waited" -ge "$secs" ]; then
+      kill -TERM "-$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+      sleep 1
+      kill -KILL "-$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      ry_start_outcome="timeout ${secs}s"
+      printf '\n[railyard] killed after %ss: the start script did not exit.\n' "$secs" >> "$log"
+      return 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  rc=0; wait "$pid" 2>/dev/null || rc=$?
+  [ "$rc" -eq 0 ] && return 0
+  ry_start_outcome="exit $rc"
+  return 1
+}
+
+ry_start_failure_notice() {  # <id> <outcome> -> the text the engine is given
+  local id=$1 outcome=$2 home; home=$(ry_home)
+  cat <<TXT
+Setup notice: this project's own environment setup script
+($RY_START_SCRIPT) failed before you started -- $outcome. Its output is in
+$home/state/$id.start.log.
+
+Repairing that script, or working around it, is not your job: the failure has
+already been reported to the yardmaster. Do not edit it and do not reinvent
+what it does.
+
+Carry on if the task does not need the environment -- a read-only survey
+usually does not. If it does need it, stop and report BLOCKED saying so. Never
+fabricate a result you could not actually verify.
+TXT
+}

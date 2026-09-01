@@ -59,6 +59,24 @@ fi
 
 ry_set_status "$id" dispatched
 
+# The project's own setup, if it has any: fixtures/<project>/ exists whether or
+# not anything uses it, so a start script can rely on it and simply find it
+# empty. A failure never blocks the dispatch -- the engine launches anyway,
+# told plainly that setup failed and that repairing it is not its job, and the
+# yardmaster gets an inbox line so it is visible without polling.
+ry_fixture_dir "$project" >/dev/null
+rm -f "$home/state/$id.setup-failed.md"
+start_rc=0
+ry_run_start_script "$id" "$siding" "$project" || start_rc=$?
+if [ "$start_rc" -ne 0 ]; then
+  ry_start_failure_notice "$id" "$ry_start_outcome" > "$home/state/$id.setup-failed.md"
+  ry_event "$id" "start-script-failed $ry_start_outcome; output in state/$id.start.log"
+  # stderr, so it survives ry-dispatch.sh sending this script's stdout to
+  # /dev/null: a dispatch that quietly opened onto a broken environment is the
+  # one thing this must not do.
+  printf 'start-script=failed (%s); see state/%s.start.log\n' "$ry_start_outcome" "$id" >&2
+fi
+
 if [ "$(ry_backend)" != none ]; then
   "$(dirname "$0")/ry-engine-launch.sh" "$id" >/dev/null
 fi

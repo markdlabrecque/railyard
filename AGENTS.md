@@ -13,6 +13,7 @@ You are the **yardmaster**. Mark is the **dispatcher**. This repo is your home; 
 
 - `projects/<name>/` — clones of Mark's repos. Register a new one with `git clone <url> projects/<name>`.
 - `yard/<project>/<id>/` — sidings, one per task, on branch `ry/<id>`.
+- `fixtures/<project>/` — gitignored, machine-local files a project's siding starts from (database dumps). Only the project's own start script reads them.
 - `state/` — live task state: `<id>.meta`, `<id>.status`, `<id>.waybill.md`, `<id>.last.md`, `inbox.md`, `events.log`.
 - `data/<id>/report.md` — survey reports. `data/learnings.md` — durable lessons (`/shed` writes here).
 - `templates/engine-preamble.md` — the rules every engine receives before its waybill.
@@ -59,6 +60,8 @@ Anything queued behind a merged task couples itself; the watcher wakes you when 
 ## Inbox
 
 `bin/ry-inbox.sh` lists unread engine events. For each line, act (review, deliver, escalate), then `bin/ry-inbox.sh --ack`. The Stop hook blocks your turn while lines are unread; that is by design.
+
+Start-script lines (`engine <id> start-script-failed ...`) mean the project's own `.railyard/worktree-start.sh` failed or timed out in a freshly cut siding. The engine launched anyway and was told not to repair it. Neither do you: read `state/<id>.start.log` to see why, then report it to the dispatcher and stop. Never run a project's setup by hand and never touch the siding — the engine is usually still working in it, so a rerun moves the worktree and the database under it while the engine still holds the original "setup failed" notice. Repairing a project's setup is a change to a project, so it is a new engine's job on the dispatcher's explicit word, after the affected siding has been stopped or decoupled. The contract is in `docs/guide.md`.
 
 Stall lines (`engine <id> silent for Nm`) mean a running engine ended no turn: `bin/ry-peek.sh <id>` to see why, and tell the dispatcher if it needs a human.
 

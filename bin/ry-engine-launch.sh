@@ -22,9 +22,13 @@ siding=$(ry_meta_get "$id" siding)
 [ -d "$siding" ] || ry_die "siding $siding missing"
 shape=$(ry_meta_get "$id" shape); branch=$(ry_meta_get "$id" branch)
 report="$home/data/$id/report.md"; mkdir -p "$home/data/$id"
+# Written by ry-couple.sh only when the project's start script failed. The
+# {{setup}} line disappears when there is none, so the usual prompt is unchanged.
+setup="$home/state/$id.setup-failed.md"
 # Prompt = templates/engine-preamble.md with placeholders filled, waybill last.
-prompt=$(awk -v id="$id" -v shape="$shape" -v branch="$branch" -v report="$report" -v wb="$home/state/$id.waybill.md" '
+prompt=$(awk -v id="$id" -v shape="$shape" -v branch="$branch" -v report="$report" -v wb="$home/state/$id.waybill.md" -v su="$setup" '
   /\{\{waybill\}\}/ { while ((getline l < wb) > 0) print l; next }
+  /\{\{setup\}\}/ { while ((getline l < su) > 0) print l; next }
   { gsub(/\{\{id\}\}/, id); gsub(/\{\{shape\}\}/, shape); gsub(/\{\{branch\}\}/, branch); gsub(/\{\{report\}\}/, report); print }
 ' "$bindir/../templates/engine-preamble.md")
 settings="$home/state/$id.settings.json"

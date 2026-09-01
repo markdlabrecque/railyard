@@ -133,3 +133,14 @@ make_ddev_project() {  # <name> [--tracked]
   fi
   ( cd "$dir" && git add -A && git commit -qm ddev && git push -q origin HEAD )
 }
+
+# Commit a .railyard/worktree-start.sh into a project, so every siding cut from
+# it has one. Body is read from stdin.
+make_start_script() {  # <project> [--not-executable]  <<'EOF' ... EOF
+  local name=$1 dir
+  dir="$RY_HOME/projects/$name"
+  mkdir -p "$dir/.railyard"
+  cat > "$dir/.railyard/worktree-start.sh"
+  [ "${2:-}" = --not-executable ] || chmod +x "$dir/.railyard/worktree-start.sh"
+  ( cd "$dir" && git add -A && git commit -qm start-script && git push -q origin HEAD )
+}

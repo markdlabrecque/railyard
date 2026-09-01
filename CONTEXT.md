@@ -76,6 +76,18 @@ default. Resolved from `--base`, then the project's `data/projects.md` line, the
 never touches the release branch; releases are cut outside it.
 _Avoid_: default branch, target branch, trunk, main
 
+**Fixtures**:
+The machine-local files a project's siding starts from — a database dump, say —
+kept per project under `fixtures/<project>/` and gitignored. Read by the
+project's own start script, never by railyard.
+_Avoid_: seeds, test data, dumps
+
+**Start script**:
+A project's own `.railyard/worktree-start.sh`, run in a freshly cut siding
+before its engine launches, so the engine opens onto a working environment. Its
+contract is in `docs/guide.md`.
+_Avoid_: bootstrap, provisioning, setup hook
+
 **Yard**:
 The whole railyard installation, and the terminals it runs in — a tmux session named `railyard` by default, or Orca terminals / cmux workspaces / herdr tabs when `data/yard.md` or `RY_BACKEND` says so.
 
