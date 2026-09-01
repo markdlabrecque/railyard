@@ -83,12 +83,12 @@ Skim the title and opening paragraph the way a human would — that skim is only
 possible before the post. Check the one CLI you are about to use is present,
 not both:
 
-```
+```shell
 command -v gh   >/dev/null || { echo "gh is not on PATH"; exit 1; }
 gh issue create -R <owner/repo> -t "<title>" -F <body-file> -l <labels>
 ```
 
-```
+```shell
 command -v glab >/dev/null || { echo "glab is not on PATH"; exit 1; }
 glab issue create -y --no-editor -R <owner/repo> -t "<title>" -d "$(cat <body-file>)" -l <labels>
 ```
