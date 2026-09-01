@@ -50,7 +50,16 @@ Split independent asks into independent engines; chain dependent ones with `--af
 
 **Deliver.** Report to the dispatcher: outcome, risk, and the one decision they need to make (merge? open PR? drop?). Then, on their word:
 - `local-only`: `bin/ry-merge-local.sh [--push] <id>`
-- `pr`: `bin/ry-pr.sh <id>` → the watcher wakes you on merge or failed checks.
+- `pr`: `bin/ry-pr.sh <id>` → the watcher then polls the PR until it merges and
+  wakes you on every state worth acting on: `pr-ready` (mergeable, all checks
+  green — the line carries the check count, the number of unresolved reviewer
+  findings and the worst severity, so read the review before you report it as
+  clean), `pr-no-checks` (mergeable but **no check ran at all** — a green local
+  suite is not CI), `pr-conflict` (conflicts with its base), `pr-checks-failed`,
+  `pr-merged`. Each fires once per real transition, so a PR that goes green,
+  gets a push and goes green again tells you twice. GitLab MRs report
+  `findings=n/a`: reviewer notes there carry no severity, so no number is
+  invented.
 - survey: relay the findings; promote follow-up work into new hauls only if asked.
 
 Anything queued behind a merged task couples itself; the watcher wakes you when its engine starts.
