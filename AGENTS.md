@@ -46,6 +46,16 @@ finding, skipped a cherry-pick that was meaningless on the target branch, and
 replaced a test that would have passed either way. A waybill that only states
 the fix gets the fix, right or wrong.
 
+**Line 1 is the title.** A waybill opens with a title, not prose: a short
+imperative summary of the whole task, at most **80 characters**, then a blank
+line 2, then the body from line 3. `bin/ry-pr.sh` uses that line verbatim as
+the PR/MR title, so the only party who knows what the whole task is for writes
+it. `bin/ry-dispatch.sh` refuses a longer first line before it cuts a siding —
+naming the cap and the length it got — because the alternative is a forge
+rejecting the title an hour later, after the branch is pushed. Surveys are held
+to the same rule: one waybill shape to remember, and a survey promoted into a
+haul already has the line.
+
 **Dispatch.** `bin/ry-dispatch.sh --haul|--survey [--mode <m>] [--after <id>[,<id>]] [--ticket <n>] [--slug <text>] [--prefix <token>] <project> "<waybill>"`. Tell the dispatcher one line: what was dispatched, the ticket it is against, and what it waits on.
 
 A dispatch is all-or-nothing. If the engine's terminal cannot be opened —

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Open a PR (GitHub via gh) or MR (GitLab via glab) for a pr-mode haul:
 # push ry/<id> to origin, create the request against the base branch, record
-# pr_url/forge in meta and set status pr-open. Title defaults to the single
-# commit subject, or the waybill's first line when there are several.
+# pr_url/forge in meta and set status pr-open. The title is the waybill's first
+# line, which is a title by contract, clamped to what the forge will accept.
 # Auto-merge is opt-in with --auto-merge (default method: merge). Checks
 # usually do not exist for seconds-to-minutes after the push, so ry-pr.sh
 # never arms or attempts a merge itself -- it only records auto_merge=<method>
@@ -43,10 +43,20 @@ git -C "$siding" fetch -q origin "$base"
 n=$(git -C "$siding" rev-list --count "origin/$base..HEAD" --)
 [ "$n" -gt 0 ] || ry_die "no commits on $branch beyond origin/$base"
 
+# The waybill's first line is a title by contract (AGENTS.md "Waybill"), so the
+# title is read, never guessed. The single-commit case used to take the commit
+# subject instead; that is removed deliberately -- a title that depends on how
+# many commits an engine happened to make is exactly the guess this ends, and
+# a commit subject describes one commit, not the task. The clamp is a backstop
+# for a waybill written before the contract: an ugly title beats a 400 from the
+# forge, which lands after the push below and leaves a branch with no PR.
 if [ -z "$title" ]; then
-  if [ "$n" -eq 1 ]; then title=$(git -C "$siding" log -1 --format=%s)
-  else title=$(head -n1 "$home/state/$id.waybill.md"); fi
+  [ -f "$home/state/$id.waybill.md" ] \
+    || ry_die "no waybill at state/$id.waybill.md to take a title from; pass --title"
+  title=$(cat "$home/state/$id.waybill.md")
 fi
+title=$(ry_title_clamp "$title")
+[ -n "$title" ] || ry_die "the title is empty; the waybill's first line is the title, or pass --title"
 body=$(printf '%s\n\nCommits:\n%s\n' "$(cat "$home/state/$id.waybill.md")" "$(git -C "$siding" log --format='- %s' "origin/$base..HEAD" --)")
 
 # The forge is detected, and its CLI checked, before the push: a missing gh or
