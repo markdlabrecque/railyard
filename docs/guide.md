@@ -11,6 +11,26 @@ projects and never edits them — every change is an **engine's** job.
 Vocabulary is in [`../CONTEXT.md`](../CONTEXT.md); why it works this way is in
 [`prd.md`](prd.md). This is how to use it.
 
+## First run
+
+A fresh clone carries no configuration. Both files that configure a yard —
+`data/yard.md` (the backend) and `data/projects.md` (the registered projects) —
+are machine-local and gitignored, so they do not travel with the repo. Until
+you write them, this is a tmux yard with no projects, and the first yardmaster
+session says so instead of leaving you to find out. Create them by hand:
+
+```sh
+mkdir -p data
+echo '- `backend: tmux`' > data/yard.md     # or orca, cmux, herdr
+git clone <url> projects/myapp
+echo '- `myapp` — local-only, notes: main repo' > data/projects.md
+```
+
+[Choosing this yard's backend](#choosing-this-yards-backend) and
+[Register a project](#register-a-project) cover the fields. Once either file
+exists the notice stops: a yard with no `data/yard.md` and a project list is a
+tmux yard on purpose.
+
 ## Open the yard
 
 ```sh
@@ -53,6 +73,13 @@ tmux is the default; Orca, cmux and herdr are the other supported
 ```
 - `backend: herdr`
 ```
+
+`data/yard.md` is yours alone: it is gitignored, it is not in the repo, and it
+does not arrive with a clone — create it yourself on each machine you run a
+yard on. It holds live yard state, and tracking it puts that state at the
+mercy of git: any operation that updates the file's path — a checkout, a
+merge, a hard reset — can put an older copy back. That happened here,
+silently, with an engine running.
 
 `bin/ry-yard.sh` then opens the yard there, and carries the choice into the
 yardmaster, so every engine it dispatches lands in the same app. `RY_BACKEND`
@@ -235,11 +262,18 @@ backend gets `railyard-herdr-2` rather than stealing the first one's client.
 git clone <url> projects/<name>
 ```
 
-Then add a line to [`../data/projects.md`](../data/projects.md):
+Then add a line to `data/projects.md`, creating the file if it is not there:
 
-```
+```text
 - `myapp` — pr, base: develop, notes: main repo
 ```
+
+Like `data/yard.md`, `data/projects.md` is machine-local: gitignored, not in
+the repo, and absent from a fresh clone. It holds live yard state, and a
+tracked file can be put back to an older copy by any git operation that
+updates its path — a checkout, a merge, a hard reset. It also lists the
+clones under `projects/`, which are this machine's — another machine's yard
+registers its own.
 
 `name` must match the directory under `projects/`. Both other fields are
 optional:

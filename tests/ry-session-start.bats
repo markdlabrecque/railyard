@@ -125,3 +125,28 @@ teardown() {
   [ "$status" -eq 0 ]
   [ "$(claim_target)" = "$pane" ]
 }
+
+# data/yard.md and data/projects.md are machine-local and gitignored, so a
+# fresh clone has neither and the readers quietly fall back to a tmux yard with
+# no projects. The first session in such a clone says so once.
+@test "a fresh clone is told it has no yard config yet" {
+  git init -q "$RY_HOME"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"First run"* ]]
+  [[ "$output" == *"data/yard.md"* ]]
+  [[ "$output" == *"you are the yardmaster"* ]]
+}
+
+@test "a configured yard gets no first-run notice, and neither does a non-clone" {
+  git init -q "$RY_HOME"
+  mkdir -p "$RY_HOME/data"; printf -- '- `backend: tmux`\n' > "$RY_HOME/data/yard.md"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [[ "$output" != *"First run"* ]]
+  rm "$RY_HOME/data/yard.md"; register_project demo local-only
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [[ "$output" != *"First run"* ]]
+  rm -rf "$RY_HOME/data" "$RY_HOME/.git"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [[ "$output" != *"First run"* ]]
+}
