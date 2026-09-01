@@ -39,8 +39,12 @@ setup() {
 }
 
 @test "AGENTS.md documents open decisions next to the Learnings section" {
-  grep -q '## Learnings' "$agents"
-  grep -q 'open-decisions.md' "$agents"
+  # "next to" means inside the Learnings section itself: the open-decisions.md
+  # mention must fall between the "## Learnings" heading and the next "## "
+  # heading, not merely somewhere in the file.
+  section=$(awk '/^## Learnings/{flag=1; next} /^## /{flag=0} flag' "$agents")
+  [ -n "$section" ]
+  printf '%s' "$section" | grep -q 'open-decisions.md'
 }
 
 @test "AGENTS.md says open decisions are a queue emptied by the dispatcher's answers" {
@@ -54,8 +58,10 @@ setup() {
 }
 
 @test "shed SKILL.md's safe-to-reset verdict accounts for open decisions" {
-  # step 4's "safe to reset" judgment currently only weighs learnings and the
+  # step's "safe to reset" judgment currently only weighs learnings and the
   # inbox; it must also weigh open decisions, or a session could be told safe
-  # to reset while a decision it raised sits unrecorded.
-  grep -A3 -B3 -i 'safe to reset' "$skill" | grep -qi 'decision'
+  # to reset while a decision it raised sits unrecorded. Anchor on the verdict
+  # sentence itself (not a line window) so a step elsewhere in the file that
+  # merely mentions open-decisions.md cannot satisfy this.
+  grep -i 'safe to reset' "$skill" | grep -qi 'open decisions'
 }
