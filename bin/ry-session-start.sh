@@ -69,8 +69,21 @@ unread=0; [ -s "$st/inbox.md" ] && unread=$(grep -c . "$st/inbox.md")
 # in the summary for the same reason unread inbox lines are.
 learnings=0
 [ -f "$home/data/learnings.md" ] && learnings=$(grep -c '^- ' "$home/data/learnings.md" || true)
-printf 'railyard: %s %d engine(s) running, %d turn-ended, %d unread inbox line(s). Read with bin/ry-inbox.sh.' \
-  "$standing" "$running" "$ended" "$unread"
+# A fresh clone has neither data/yard.md nor data/projects.md: both are
+# machine-local and gitignored, so they do not travel with the repo. The
+# readers fall back (tmux, no projects) and would say nothing, which is the
+# same silent-wrong-value failure that got those files untracked in the first
+# place. So say it once, as a notice and not an error — dispatching still
+# works. Either file existing means the yard is configured on purpose, and the
+# notice goes quiet. Only a clone gets it: a yard home that is not a git
+# checkout is a test fixture or a scratch home, not somebody's first run.
+firstrun=""
+if [ -e "$home/.git" ] && [ ! -f "$home/data/yard.md" ] && [ ! -f "$home/data/projects.md" ]; then
+  firstrun=" First run: this clone has no data/yard.md and no data/projects.md — both are machine-local and gitignored, so a clone never carries them. Until they exist this is a tmux yard with no projects registered; tell the dispatcher, and see docs/guide.md § First run."
+fi
+
+printf 'railyard: %s %d engine(s) running, %d turn-ended, %d unread inbox line(s). Read with bin/ry-inbox.sh.%s' \
+  "$standing" "$running" "$ended" "$unread" "$firstrun"
 if [ "$learnings" -gt 0 ]; then
   printf ' %d unfiled learning(s) in data/learnings.md: promote or drop each one (AGENTS.md § Learnings).' "$learnings"
 fi
