@@ -165,7 +165,7 @@ apps has engines that go dark the moment one of them is quit. Dispatching or
 coupling onto a second backend is refused:
 
 ```
-error: this yard already has engines on herdr (xyz-0830-1412-3f9a), and tmux
+error: this yard already has engines on herdr (16-name-work-by-ticket), and tmux
 would split it. ...
 ```
 
@@ -405,6 +405,18 @@ The yardmaster decides two things per task and tells you what it picked:
 - **mode** — from the project's registered mode. Say "use local-only for this
   one" to override.
 
+**Naming.** A task is named after the work, not after railyard. With a ticket
+the id is `<number>-<slug>` — `3-fixtures-start-script`; without one it is the
+slug alone — `news-filter-styling`. That id is the siding directory, the branch
+(`ry/<id>`) and every `state/<id>.*` file. Two tasks on one ticket is normal, so
+the second gets `-2`. The yardmaster picks the slug; you can name it yourself in
+the ask, and ids made before this scheme keep working.
+
+In what the yardmaster says back to you, a ticket is `#N` and a pull or merge
+request is `!N` — the same on GitHub and GitLab, so the two never blur. Task
+ids, branch names and commit hashes are mechanics: they come after the outcome,
+if at all.
+
 **Wait.** The turn ends. You get on with your day. When the engine finishes,
 the watcher wakes the yardmaster with the engine's own one-line handoff.
 
@@ -421,7 +433,7 @@ uncommitted changes each need your explicit word, for that specific task.
 | mode | what happens |
 | --- | --- |
 | `local-only` | `bin/ry-merge-local.sh [--push] <id>` — fast-forwards the base branch in your clone |
-| `pr` | `bin/ry-pr.sh <id>` — pushes the branch, opens the PR/MR, then the watcher polls CI and tells you when it merges or the checks fail |
+| `pr` | `bin/ry-pr.sh <id>` — pushes the branch, opens the PR/MR, then the watcher polls it until it merges and tells you when it is ready to merge (`pr-ready`, with the count and worst severity of the unresolved reviewer findings), when no check ran at all (`pr-no-checks`), when it conflicts (`pr-conflict`), when checks fail, and when it merges |
 | survey | nothing to merge; the findings are the deliverable |
 
 **Decouple.** `bin/ry-decouple.sh [--delete-branch] <id>` kills the window,
@@ -452,10 +464,10 @@ each queued task is waiting on:
 
 ```
 QUEUED
-  myapp-0830-1244-6a3d  myapp  haul  pr  4m
-      waiting on myapp-0830-1244-994b
+  #12  12-news-filter-styling  myapp  haul  pr  4m
+      waiting on 11-news-filter-query
 RUNNING
-  myapp-0830-1244-994b  myapp  haul  pr  9m
+  #11  11-news-filter-query  myapp  haul  pr  9m
 inbox: 0 unread
 ```
 
@@ -500,7 +512,7 @@ instructions into the engine's window; it keeps its context and carries on.
 | --- | --- |
 | `bin/ry-yard.sh` | open or attach to the yard |
 | `bin/ry-view.sh [--dry-run] <herdr\|orca\|cmux>` | open a viewer onto a tmux-hosted yard |
-| `bin/ry-dispatch.sh --haul\|--survey [--mode <m>] [--base <b>] [--after <id>] <project> "<waybill>"` | dispatch or queue a task |
+| `bin/ry-dispatch.sh --haul\|--survey [--mode <m>] [--base <b>] [--after <id>] [--ticket <n>] [--slug <text>] <project> "<waybill>"` | dispatch or queue a task |
 | `bin/ry-manifest.sh` | every task not yet decoupled |
 | `bin/ry-inbox.sh [--ack]` | unread engine events |
 | `bin/ry-deps.sh <id>` | is a queued task ready, pending, or stranded |

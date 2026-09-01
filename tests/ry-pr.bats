@@ -55,28 +55,31 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   RY_FORGE=gitlab ry-pr.sh "$ID" >/dev/null
   echo '{"state":"opened","head_pipeline":{"status":"running"}}' > "$RY_FAKE_GLAB_VIEW"
   run ry-pr-poll.sh "$ID"
-  [ "$status" -eq 0 ]; [ "$output" = "state=open checks=pending" ]
+  [ "$status" -eq 0 ]; [ "$output" = "state=open checks=pending merge=unknown findings=-" ]
   grep -q -- "mr view 12" "$RY_FAKE_FORGE_LOG"
   echo '{"state":"merged","head_pipeline":{"status":"success"}}' > "$RY_FAKE_GLAB_VIEW"
   run ry-pr-poll.sh "$ID"
-  [ "$output" = "state=merged checks=success" ]
+  [ "$output" = "state=merged checks=success merge=unknown findings=-" ]
   [ "$(cat "$RY_HOME/state/$ID.status")" = "merged" ]
   grep -q " $ID pr-merged https://gitlab.example.com/grp/sub/r/-/merge_requests/12$" "$RY_HOME/state/events.log"
 }
 
-@test "pr-poll github: failed checks raise one event; success is quiet" {
+@test "pr-poll github: failed checks raise one event, and aggregate the rollup" {
   RY_FORGE=github ry-pr.sh "$ID" >/dev/null
-  echo '{"state":"OPEN","statusCheckRollup":[{"status":"COMPLETED","conclusion":"FAILURE"},{"status":"COMPLETED","conclusion":"SUCCESS"}]}' > "$RY_FAKE_GH_VIEW"
+  echo '{"state":"OPEN","mergeStateStatus":"CLEAN","statusCheckRollup":[{"status":"COMPLETED","conclusion":"FAILURE"},{"status":"COMPLETED","conclusion":"SUCCESS"}]}' > "$RY_FAKE_GH_VIEW"
   run ry-pr-poll.sh "$ID"
-  [ "$output" = "state=open checks=failure" ]
+  [ "$output" = "state=open checks=failure merge=clean findings=-" ]
   run ry-pr-poll.sh "$ID"
   [ "$(grep -c "pr-checks-failed" "$RY_HOME/state/events.log")" -eq 1 ]
-  echo '{"state":"OPEN","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}]}' > "$RY_FAKE_GH_VIEW"
+  echo '{"state":"OPEN","mergeStateStatus":"CLEAN","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"},{"status":"COMPLETED","conclusion":"NEUTRAL"}]}' > "$RY_FAKE_GH_VIEW"
   run ry-pr-poll.sh "$ID"
-  [ "$output" = "state=open checks=success" ]
-  echo '{"state":"OPEN","statusCheckRollup":[]}' > "$RY_FAKE_GH_VIEW"
+  [ "$output" = "state=open checks=success merge=clean findings=0" ]
+  echo '{"state":"OPEN","mergeStateStatus":"CLEAN","statusCheckRollup":[{"status":"IN_PROGRESS"}]}' > "$RY_FAKE_GH_VIEW"
   run ry-pr-poll.sh "$ID"
-  [ "$output" = "state=open checks=none" ]
+  [ "$output" = "state=open checks=pending merge=clean findings=-" ]
+  echo '{"state":"OPEN","mergeStateStatus":"CLEAN","statusCheckRollup":[]}' > "$RY_FAKE_GH_VIEW"
+  run ry-pr-poll.sh "$ID"
+  [ "$output" = "state=open checks=none merge=clean findings=0" ]
 }
 
 @test "watch polls open PRs and turns pr-merged into an inbox line with the url" {

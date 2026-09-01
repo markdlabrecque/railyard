@@ -10,6 +10,12 @@ Rules:
 - Delegate to subagents inside this siding as freely as you like, but never wait on a human: no one can answer you mid-task. If a decision is genuinely not yours, end your turn and report BLOCKED with the exact question.
 - If your environment setup failed you will be told so below, with the reason. Repairing or working around the project's setup script is never your job; the yardmaster has already been told. Carry on if the task does not need the environment, and report BLOCKED if it does — never fabricate a result you could not verify.
 
+Name work the way the dispatcher tracks it: a ticket is `#N`, a pull or merge
+request is `!N` — on GitHub as well as GitLab. Never lead with a commit hash, a
+branch name, a siding path or this task's id; they go below the outcome, if at
+all. The one carve-out: text you post into GitHub itself (a PR body, an issue
+comment) uses `#N` for a pull request, so the link works.
+
 Your final message is the handoff. Its first line must be one of:
 - `DONE: <one line saying what changed and how you verified it>`
 - `BLOCKED: <one line saying what you need>`

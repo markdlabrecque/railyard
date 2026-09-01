@@ -151,6 +151,52 @@ teardown() {
   [[ "$output" != *"First run"* ]]
 }
 
+# state/open-decisions.md is a live-state queue, mirrored on data/learnings.md:
+# items awaiting the dispatcher's word (unanswered decisions, undispatched
+# asks, review judgments). The summary names it the same way it names unfiled
+# learnings — a count, the path, and a pointer to where AGENTS.md documents it.
+@test "session start reports open decisions" {
+  mkdir -p "$RY_HOME/state"
+  printf '# Open decisions\n\n- abcd1234: merge or drop?\n- efgh5678: undispatched — needs project name\n' > "$RY_HOME/state/open-decisions.md"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"2 open decision(s)"* ]]
+  [[ "$output" == *"open-decisions.md"* ]]
+  [[ "$output" == *"AGENTS.md"* ]]
+  [[ "$output" == *"decision"* ]]
+}
+
+@test "no open-decisions.md means the summary says nothing about decisions" {
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [ ! -e "$RY_HOME/state/open-decisions.md" ]
+  [[ "$output" != *"open-decisions"* ]]
+  [[ "$output" != *"decision"* ]]
+}
+
+@test "an empty or header-only open-decisions.md is not reported" {
+  mkdir -p "$RY_HOME/state"
+  : > "$RY_HOME/state/open-decisions.md"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"open-decisions"* ]]
+  [[ "$output" != *"decision"* ]]
+
+  printf '# Open decisions\n\n' > "$RY_HOME/state/open-decisions.md"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"open-decisions"* ]]
+  [[ "$output" != *"decision"* ]]
+}
+
+@test "an engine never sees open-decisions output" {
+  mkdir -p "$RY_HOME/state"
+  printf '%s\n' '- some-id: pending call' > "$RY_HOME/state/open-decisions.md"
+  RY_ID=proj-0101-0000-abcd TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 # Regression guard for the hermetic environment established in tests/helpers.bash.
 # Inside an engine siding RY_ID and friends are exported into the terminal;
 # without the unset at load time this test fails, and so do the eleven tests

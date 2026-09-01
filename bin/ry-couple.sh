@@ -47,7 +47,11 @@ git -C "$pdir" worktree add -q -b "$branch" "$siding" "$start"
 
 # Before the engine — or any start script it runs — can reach ddev, give the
 # siding its own DDEV project name. Silent no-op for a project without .ddev/.
-prefix=$(ry_meta_get "$id" prefix); [ -n "$prefix" ] || prefix=${id##*-}
+# A meta with no prefix line was written before railyard recorded one; the
+# default is derived from the id, so it is the same name dispatch would have
+# chosen and the same one decouple will later delete.
+prefix=$(ry_meta_get "$id" prefix)
+[ -n "$prefix" ] || prefix=$(ry_ddev_default_prefix "$id" "$project")
 if ! ddev_name=$(ry_ddev_write_override "$siding" "$project" "$prefix"); then
   # Nothing half-cut: undo the worktree so the task stays queued and can be
   # coupled again once the project's .gitignore is fixed.

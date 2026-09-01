@@ -8,8 +8,9 @@
 #   2. engines with status "running" that their backend reports blocked, or
 #      untouched for RY_STALL_MIN minutes (default 20) -> one inbox line, once
 #      per engine;
-#   3. engines with status "pr-open" -> ry-pr-poll.sh every RY_PR_POLL_SEC
-#      seconds (default 120); merged / failed checks surface as events.
+#   3. tasks with a pr_url in their meta and no merge yet -> ry-pr-poll.sh
+#      every RY_PR_POLL_SEC seconds (default 120); merged, ready, conflicting
+#      and failing PRs surface as events.
 # The inbox (state/inbox.md) is the durable record; pane injection is a nudge.
 # usage: ry-watch.sh [--once]
 set -uo pipefail
@@ -56,13 +57,18 @@ pass() {
       esac
       continue
     fi
-    if [ "$status" = pr-open ]; then
+    # A task with a PR is polled until that PR reaches a terminal outcome, and
+    # the trigger is pr_url in the meta, not the status. The status is written
+    # by whatever happened last — a turn end after the PR opened used to erase
+    # pr-open and with it every chance of ever seeing the merge (#10). pr_url is
+    # written once by ry-pr.sh and never moves.
+    if [ "$status" != merged ] && [ -s "$st/$id.meta" ] &&
+       grep -q '^pr_url=' "$st/$id.meta"; then
       last_poll=$(cat "$st/$id.pr-polled" 2>/dev/null || echo 0)
       if [ $((now - last_poll)) -ge "$pr_poll_sec" ]; then
         printf '%s\n' "$now" > "$st/$id.pr-polled"
         "$bindir/ry-pr-poll.sh" "$id" >/dev/null 2>>"$st/watch.log" || true
       fi
-      continue
     fi
     [ "$status" = running ] || continue
     [ -e "$st/$id.stall-warned" ] && continue

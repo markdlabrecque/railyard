@@ -40,9 +40,11 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   run ry_prefix_valid "a.b";    [ "$status" -ne 0 ]
 }
 
-@test "without --prefix the task id's random suffix is used" {
-  id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
-  grep -q "^prefix=${id##*-}\$" "$RY_HOME/state/$id.meta"
+# The id is unique to the task; the id's last field is the last word of its
+# description, which two tasks can easily share.
+@test "without --prefix the task id itself is used" {
+  id=$(ry-dispatch.sh --haul --slug "news filter styling" xyz "x" | sed -n 's/^id=//p')
+  grep -q "^prefix=$id\$" "$RY_HOME/state/$id.meta"
 }
 
 # --- the name ----------------------------------------------------------------
@@ -68,7 +70,7 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
 
 # Truncating would collide; aborting would make the dispatcher re-run for a
 # flag that is only ever a convenience. So: fall back, out loud.
-@test "an over-long --prefix falls back to the id suffix and says so" {
+@test "an over-long --prefix falls back to the id and says so" {
   make_ddev_project xyz
   long=$(printf 'p%.0s' $(seq 1 80))
   run ry-dispatch.sh --haul --prefix "$long" xyz "x"
@@ -76,10 +78,10 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   [[ "$output" == *"too long"* ]]
   [[ "$output" == *"63"* ]]
   id=$(sed -n 's/^id=//p' <<<"$output")
-  [[ "$output" == *"${id##*-}"* ]]              # it names the value it used
+  [[ "$output" == *"$id"* ]]                    # it names the value it used
   # and the meta agrees with the DDEV project that actually exists
-  grep -q "^prefix=${id##*-}\$" "$RY_HOME/state/$id.meta"
-  grep -q "^name: ${id##*-}-xyz\$" "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
+  grep -q "^prefix=$id\$" "$RY_HOME/state/$id.meta"
+  grep -q "^name: $id-xyz\$" "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
 }
 
 @test "the fallback applies to a project with no .ddev/ too, and still dispatches" {
@@ -87,7 +89,7 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   run ry-dispatch.sh --haul --prefix "$long" xyz "x"
   [ "$status" -eq 0 ]
   id=$(sed -n 's/^id=//p' <<<"$output")
-  grep -q "^prefix=${id##*-}\$" "$RY_HOME/state/$id.meta"
+  grep -q "^prefix=$id\$" "$RY_HOME/state/$id.meta"
   [ -d "$RY_HOME/yard/xyz/$id" ]
 }
 
@@ -112,10 +114,10 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   [ -z "$(git -C "$RY_HOME/yard/xyz/$id" status --porcelain)" ]
 }
 
-@test "couple falls back to the id suffix when no prefix was given" {
+@test "couple falls back to the id when no prefix was given" {
   make_ddev_project xyz
-  id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
-  grep -q "^name: ${id##*-}-xyz\$" "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
+  id=$(ry-dispatch.sh --haul --slug "news filter styling" xyz "x" | sed -n 's/^id=//p')
+  grep -q "^name: $id-xyz\$" "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
 }
 
 @test "a project without .ddev/ is untouched" {
@@ -247,4 +249,40 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   PATH="$BATS_TEST_DIRNAME/../bin:/usr/bin:/bin" run ry-decouple.sh "$id"
   [ "$status" -eq 0 ]
   [ ! -e "$RY_HOME/yard/xyz/$id" ]
+}
+
+# --- long slugs --------------------------------------------------------------
+# A slug is far longer than the two random bytes ids used to end in, so
+# `<id>-<project>` overflowing a 63-character hostname label stopped being an
+# edge case. The fallback has to stay unique: two tasks on one ticket differ
+# only in their trailing counter, so truncating would map them onto one DDEV
+# project -- the collision the whole override exists to prevent.
+@test "a long slug still yields a working DDEV project name inside 63 characters" {
+  long_project=$(printf 'p%.0s' $(seq 1 40))
+  make_project "$long_project"
+  make_ddev_project "$long_project"
+  wb="fixtures start script for the whole yard"
+  a=$(ry-dispatch.sh --haul --ticket 3 --slug "$wb" "$long_project" "x" | sed -n 's/^id=//p')
+  b=$(ry-dispatch.sh --haul --ticket 3 --slug "$wb" "$long_project" "x" | sed -n 's/^id=//p')
+  [ "$a" != "$b" ]
+  [ $(( ${#a} + 1 + ${#long_project} )) -gt 63 ]   # the id itself will not fit
+  na=$(sed -n 's/^name: //p' "$RY_HOME/yard/$long_project/$a/.ddev/config.local.yaml")
+  nb=$(sed -n 's/^name: //p' "$RY_HOME/yard/$long_project/$b/.ddev/config.local.yaml")
+  [ -n "$na" ] && [ "$na" != "$nb" ]
+  for n in "$na" "$nb"; do
+    [ "${#n}" -le 63 ]
+    [[ "$n" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]]
+  done
+  # and the meta names the project that was actually written
+  grep -q "^prefix=${na%-$long_project}\$" "$RY_HOME/state/$a.meta"
+}
+
+@test "the long-slug fallback is stable: couple rebuilds it from the id alone" {
+  lib
+  long_project=$(printf 'p%.0s' $(seq 1 40))
+  a=$(ry_ddev_default_prefix 3-fixtures-start-script-for-the-whole "$long_project")
+  b=$(ry_ddev_default_prefix 3-fixtures-start-script-for-the-whole "$long_project")
+  [ "$a" = "$b" ]
+  [ "$a" != 3-fixtures-start-script-for-the-whole ]
+  [ "$a" != "$(ry_ddev_default_prefix 3-fixtures-start-script-for-the-whole-2 "$long_project")" ]
 }
