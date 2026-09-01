@@ -36,13 +36,15 @@ prompt=$(awk -v id="$id" -v shape="$shape" -v branch="$branch" -v report="$repor
 ' "$bindir/../templates/engine-preamble.md")
 settings="$home/state/$id.settings.json"
 
-jq -n --arg cmd "exec $bindir/ry-engine-stop.sh" '{hooks:{Stop:[{hooks:[{type:"command",command:$cmd}]}]}}' > "$settings"
+jq -n --arg cmd "exec $(printf %q "$bindir/ry-engine-stop.sh")" '{hooks:{Stop:[{hooks:[{type:"command",command:$cmd}]}]}}' > "$settings"
 
 # Belt and braces (issue #5): --settings is lost on a --resume relaunch, so
 # the hook is also registered in the siding itself, where Claude Code reads
 # project settings regardless of how the session started.
-ry_write_stop_hook "$siding" "$bindir"
+# Ignore first, then write: a launch interrupted between the two would
+# otherwise leave an untracked mktemp sibling in the siding.
 ry_gitignore_stop_hook "$siding"
+ry_write_stop_hook "$siding" "$bindir"
 
 engine_cmd=${RY_ENGINE_CMD:-claude --dangerously-skip-permissions}
 # Env travels through the window command so the Stop hook can find home + id.

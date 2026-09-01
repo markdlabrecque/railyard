@@ -119,6 +119,55 @@ JSON
   [ -z "$(git -C "$siding" status --porcelain)" ]
 }
 
+@test "a project rule that covers only the settled file still gets the sibling covered" {
+  # `.claude/settings.local.json` alone leaves settings.local.json.aB3xY9
+  # untracked, so railyard must not treat it as good enough and return early.
+  echo '.claude/settings.local.json' >> "$RY_HOME/projects/xyz/.gitignore"
+  ( cd "$RY_HOME/projects/xyz" && git add -A && git commit -qm gitignore && git push -q origin HEAD )
+  id=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
+  wait_for_log
+  siding="$RY_HOME/yard/xyz/$id"
+  touch "$siding/.claude/settings.local.json.aB3xY9"
+  [ -z "$(git -C "$siding" status --porcelain)" ]
+}
+
+# --- the hook command must survive a bindir with a space ------------------
+# Claude Code runs the command through a shell. Unquoted, a path with a space
+# splits into two words and the hook silently never fires: the engine works
+# and reports nothing, which is issue #5 by another route.
+
+@test "the registered command runs even when bindir contains a space" {
+  bindir="$BATS_TEST_TMPDIR/bin dir"
+  mkdir -p "$bindir" "$BATS_TEST_TMPDIR/siding"
+  printf '#!/usr/bin/env bash\ntouch %s\n' "$BATS_TEST_TMPDIR/fired" > "$bindir/ry-engine-stop.sh"
+  chmod +x "$bindir/ry-engine-stop.sh"
+  ( cd "$BATS_TEST_TMPDIR/siding" && git init -q . )
+  source "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"
+  ry_write_stop_hook "$BATS_TEST_TMPDIR/siding" "$bindir"
+  cmd=$(jq -r '[.hooks.Stop[]?.hooks[]?.command] | first' "$BATS_TEST_TMPDIR/siding/.claude/settings.local.json")
+  ( exec bash -c "$cmd" )
+  [ -f "$BATS_TEST_TMPDIR/fired" ]
+}
+
+@test "an older unquoted entry is replaced, not joined by a second one" {
+  # Before the quoting fix the command was written bare. A relaunch must
+  # recognise that entry as railyard's own and drop it, or the hook ends up
+  # registered twice from one launch.
+  # The bindir needs a space, or quoted and unquoted are the same string and
+  # this proves nothing.
+  bindir="$BATS_TEST_TMPDIR/bin dir"
+  siding="$BATS_TEST_TMPDIR/siding"
+  mkdir -p "$siding/.claude" "$bindir"
+  ( cd "$siding" && git init -q . )
+  jq -n --arg cmd "exec $bindir/ry-engine-stop.sh" \
+    '{hooks:{Stop:[{hooks:[{type:"command",command:$cmd}]}]}}' > "$siding/.claude/settings.local.json"
+  source "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"
+  ry_write_stop_hook "$siding" "$bindir"
+  n=$(jq '[.hooks.Stop[]?.hooks[]? | select(.command | test("ry-engine-stop"))] | length' \
+    "$siding/.claude/settings.local.json")
+  [ "$n" -eq 1 ]
+}
+
 # --- ry-engine-stop.sh must never swallow a turn end ---------------------
 # The hook is registered in two places now, but Claude Code fires an identical
 # hook command once however many settings sources name it, so this script does

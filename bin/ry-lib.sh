@@ -179,18 +179,24 @@ RY_STOP_HOOK_IGNORE=".claude/settings.local.json*"
 
 ry_write_stop_hook() {  # <siding> <bindir>: register ry-engine-stop.sh as the Stop hook, merged
   # Never settings.json -- railyard's own sidings carry a tracked one, and
-  # this file must stay untracked and per-siding. Old railyard entries (same
-  # command) are dropped before the fresh one is added, so re-running this is
-  # a no-op rather than a growing list; every other Stop entry is untouched.
+  # this file must stay untracked and per-siding. Every railyard entry is
+  # dropped before the fresh one is added, so re-running this is a no-op
+  # rather than a growing list; every other Stop entry is untouched. The match
+  # is on the script name, not on the exact string: the command used to be
+  # written unquoted, and a sameness test would leave that older entry in
+  # place beside the new one, firing the hook twice from one launch.
   local siding=$1 bindir=$2 cmd src tmp
   local dir="$siding/.claude"
   mkdir -p "$dir"
-  cmd="exec $bindir/ry-engine-stop.sh"
+  # Claude Code runs a hook command through a shell, so a bindir containing a
+  # space would split into two words and the hook would silently never run --
+  # an engine that works and reports nothing, which is issue #5 all over again.
+  cmd="exec $(printf %q "$bindir/ry-engine-stop.sh")"
   src='{}'; [ -f "$dir/settings.local.json" ] && src=$(cat "$dir/settings.local.json")
   tmp=$(mktemp "$dir/settings.local.json.XXXXXX")
   if printf '%s' "$src" | jq --arg cmd "$cmd" '
       .hooks.Stop //= [] |
-      .hooks.Stop |= (map(.hooks |= (map(select(.command != $cmd)))) | map(select((.hooks | length) > 0))) |
+      .hooks.Stop |= (map(.hooks |= (map(select((.command // "") | test("ry-engine-stop\\.sh") | not)))) | map(select((.hooks | length) > 0))) |
       .hooks.Stop += [{hooks: [{type: "command", command: $cmd}]}]
     ' > "$tmp"; then
     mv "$tmp" "$dir/settings.local.json"
@@ -199,7 +205,7 @@ ry_write_stop_hook() {  # <siding> <bindir>: register ry-engine-stop.sh as the S
   fi
 }
 
-ry_gitignore_stop_hook() {  # <siding>: keep the siding clean after ry_write_stop_hook
+ry_gitignore_stop_hook() {  # <siding>: keep the siding clean, before ry_write_stop_hook writes anything
   # Only touches the project's own gitignore machinery when the project has
   # not already excluded the file itself; the check-and-append is written
   # once, so a second launch never grows the exclude file. Scoped to the
@@ -209,7 +215,12 @@ ry_gitignore_stop_hook() {  # <siding>: keep the siding clean after ry_write_sto
   # of whether *this project* already ignores the file must not depend on the
   # operator's machine, or another engine on another host would go dirty.
   local siding=$1 common
-  git -C "$siding" -c core.excludesfile=/dev/null check-ignore -q -- "$RY_STOP_HOOK_FILE" && return 0
+  # Both paths, not just the settled one: a project that ignores exactly
+  # `.claude/settings.local.json` still leaves an interrupted mktemp sibling
+  # untracked, and one untracked file is all it takes for ry-pr.sh to refuse
+  # the PR. Nothing is written until the sibling is covered too.
+  git -C "$siding" -c core.excludesfile=/dev/null check-ignore -q -- \
+    "$RY_STOP_HOOK_FILE" "$RY_STOP_HOOK_FILE.XXXXXX" && return 0
   # --git-common-dir is absolute for a linked worktree and relative for an
   # ordinary checkout, so resolve it against the siding rather than $PWD.
   common=$(cd "$siding" && cd "$(git rev-parse --git-common-dir)" && pwd)
