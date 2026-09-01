@@ -75,12 +75,12 @@ setup() { setup_home; make_project xyz; }
   [[ "$output" == *"- risk: medium — touches auth"* ]]
 }
 
-@test "a finished task's row shows only the first line when there is no risk line" {
+@test "the board's risk line comes from the inspection block, not from prose" {
   A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
   echo turn-ended > "$RY_HOME/state/$A.status"
-  echo "DONE: quick doc fix" > "$RY_HOME/state/$A.last.md"
+  printf 'DONE: fixed it\n\n## Notes\n- risk: high — quoted from the waybill, not a verdict\n\n## Inspection\n- inspector: ran\n- risk: low — one line changed\n' > "$RY_HOME/state/$A.last.md"
   run ry-manifest.sh
   [ "$status" -eq 0 ]
-  [[ "$output" == *"DONE: quick doc fix"* ]]
-  [[ "$output" != *"- risk:"* ]]
+  [[ "$output" == *"- risk: low — one line changed"* ]]
+  [[ "$output" != *"quoted from the waybill"* ]]
 }

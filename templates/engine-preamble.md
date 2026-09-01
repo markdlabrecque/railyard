@@ -13,7 +13,9 @@ Rules:
   with the instruction to run it itself rather than trust your claim, and (d)
   the weakness the waybill names, if it names one. Fix every must-fix, or
   reject it in writing with a reason. Two rounds at most: a third means
-  BLOCKED, not a third round.
+  BLOCKED, not a third round. If no `reviewer` agent type exists here, use a
+  general subagent and give it the same brief — the point is fresh eyes on
+  the artifacts, not the agent's name.
 - Then the revert check: name **one assertion, by file and line, that fails
   when your change is reverted**, and have the inspector run it on a reverted
   copy and watch it fail. A test that still passes with the feature gone is the

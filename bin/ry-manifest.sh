@@ -40,8 +40,12 @@ for status in queued running turn-ended pr-open merged dispatched; do
     if [ -f "$st/$id.last.md" ]; then
       line+=$'\n'"      $(head -n1 "$st/$id.last.md")"
       # Surface the risk line too, so a finished task worth a look stands out
-      # on the board without opening its handoff.
-      risk_line=$(sed -n 's/^- risk:.*/&/p' "$st/$id.last.md" | head -n 1)
+      # on the board without opening its handoff. Scoped to the Inspection
+      # block: a `- risk:` line quoted in the handoff's prose is not a verdict.
+      risk_line=$(awk '
+        /^##[[:space:]]+Inspection[[:space:]]*$/ { f=1; next }
+        f && (/^#/ || /^```/) { exit }
+        f && /^- risk:/ { print; exit }' "$st/$id.last.md")
       [ -n "$risk_line" ] && line+=$'\n'"      $risk_line"
     fi
     rows+="$line"$'\n'; n=$((n+1))

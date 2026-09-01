@@ -115,3 +115,46 @@ EOF
   [ "$status" -eq 3 ]
   [[ "$output" == *"suite"* ]]
 }
+
+@test "a heading with a trailing space is still the inspection block" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  well_formed_block | sed 's/^## Inspection$/## Inspection /' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"- risk: low — docs only"* ]]
+}
+
+@test "a CRLF handoff parses" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  well_formed_block | sed 's/$/\r/' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"- inspector: ran"* ]]
+}
+
+@test "the block stops at a fence, so a copied template does not leak" {
+  # An engine that copies the preamble's fenced example emits a closing fence
+  # right after the risk line. It is not part of the verdict.
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  { well_formed_block; printf '```\nprose after the fence\n'; } > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"prose after the fence"* ]]
+  [[ "$output" != *'```'* ]]
+}
+
+@test "the block stops at a subheading too" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  { well_formed_block; printf '\n### Notes\nburied detail\n'; } > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"buried detail"* ]]
+}
+
+@test "a risk grade must be a whole word, not a prefix" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  well_formed_block | sed 's/^- risk:.*/- risk: lowkey unsure/' > "$RY_HOME/state/$A.last.md"
+  run ry-verdict.sh "$A"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"risk"* ]]
+}

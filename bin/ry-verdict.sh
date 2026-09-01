@@ -21,13 +21,18 @@ fi
 
 [ -f "$last" ] || { RY_EXIT=2 ry_die "no handoff at $last"; }
 
+# The heading is matched loosely and the block ends at the next heading of any
+# depth or at a fence: an engine that copies the preamble's fenced template
+# literally would otherwise leak the closing ``` into the block, and a stray
+# trailing space would read as "no block at all" — a correct engine bounced for
+# whitespace.
 block=""
 in_block=0
 while IFS= read -r line || [ -n "$line" ]; do
-  if [ "$in_block" -eq 1 ] && [[ $line == "## "* ]]; then
-    break
-  fi
-  if [ "$in_block" -eq 0 ] && [ "$line" = "## Inspection" ]; then
+  line=${line%$'\r'}
+  if [ "$in_block" -eq 1 ]; then
+    case $line in '#'*|'```'*) break ;; esac
+  elif [[ $line =~ ^##[[:space:]]+Inspection[[:space:]]*$ ]]; then
     in_block=1
   fi
   if [ "$in_block" -eq 1 ]; then
@@ -56,7 +61,8 @@ for key in inspector suite must-fix "revert check" risk; do
       fi
       ;;
     risk)
-      case $val in low*|medium*|high*) ;; *) bad+=("$key") ;; esac
+      # The grade is a whole word: "lowkey unsure" is not a risk grade.
+      case ${val%%[![:alnum:]]*} in low|medium|high) ;; *) bad+=("$key") ;; esac
       ;;
   esac
 done
