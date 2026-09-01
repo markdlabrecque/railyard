@@ -69,6 +69,9 @@ pass() {
         printf '%s\n' "$now" > "$st/$id.pr-polled"
         "$bindir/ry-pr-poll.sh" "$id" >/dev/null 2>>"$st/watch.log" || true
       fi
+      if grep -q '^auto_merge=' "$st/$id.meta" && [ ! -e "$st/$id.auto-armed" ]; then
+        "$bindir/ry-auto-merge.sh" "$id" >/dev/null 2>>"$st/watch.log" || true
+      fi
     fi
     [ "$status" = running ] || continue
     [ -e "$st/$id.stall-warned" ] && continue
