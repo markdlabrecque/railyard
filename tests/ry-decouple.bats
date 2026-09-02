@@ -38,3 +38,62 @@ setup() {
   run ry-decouple.sh nope
   [ "$status" -ne 0 ]
 }
+
+# data/<id>/ goes with the task (#34): empty is removed, files move to
+# data/<project>/<id>-<file>, and nothing else under data/ is touched.
+
+@test "haul dispatch creates no data/<id>/" {
+  [ ! -e "$RY_HOME/data/$ID" ]
+}
+
+@test "decouple removes an empty data/<id>/ and leaves other dirs alone" {
+  mkdir -p "$RY_HOME/data/$ID" "$RY_HOME/data/railway"
+  echo parked > "$RY_HOME/data/railway/notes.md"
+  run ry-decouple.sh "$ID"
+  [ "$status" -eq 0 ]
+  [ ! -e "$RY_HOME/data/$ID" ]
+  [ ! -e "$RY_HOME/data/xyz" ]
+  [ "$(cat "$RY_HOME/data/railway/notes.md")" = parked ]
+}
+
+@test "decouple moves a report to data/<project>/<id>-report.md" {
+  mkdir -p "$RY_HOME/data/$ID"
+  printf 'findings\n' > "$RY_HOME/data/$ID/report.md"
+  run ry-decouple.sh --force --delete-branch "$ID"
+  [ "$status" -eq 0 ]
+  [ ! -e "$RY_HOME/data/$ID" ]
+  [ "$(find "$RY_HOME/data/xyz" -type f | wc -l)" -eq 1 ]
+  [ "$(cat "$RY_HOME/data/xyz/$ID-report.md")" = findings ]
+}
+
+@test "two surveys of one project keep both reports" {
+  ID2=$(ry-dispatch.sh --haul xyz "task" | sed -n 's/^id=//p')
+  [ "$ID2" != "$ID" ]
+  mkdir -p "$RY_HOME/data/$ID" "$RY_HOME/data/$ID2"
+  echo one > "$RY_HOME/data/$ID/report.md"
+  echo two > "$RY_HOME/data/$ID2/report.md"
+  ry-decouple.sh "$ID"; ry-decouple.sh "$ID2"
+  [ "$(cat "$RY_HOME/data/xyz/$ID-report.md")" = one ]
+  [ "$(cat "$RY_HOME/data/xyz/$ID2-report.md")" = two ]
+}
+
+@test "decouple keeps every file, drops only .DS_Store" {
+  mkdir -p "$RY_HOME/data/$ID/sub"
+  echo body > "$RY_HOME/data/$ID/pr-body.md"
+  echo deep > "$RY_HOME/data/$ID/sub/notes.md"
+  : > "$RY_HOME/data/$ID/.DS_Store"
+  run ry-decouple.sh "$ID"
+  [ "$status" -eq 0 ]
+  [ ! -e "$RY_HOME/data/$ID" ]
+  [ "$(cat "$RY_HOME/data/xyz/$ID-pr-body.md")" = body ]
+  [ "$(cat "$RY_HOME/data/xyz/$ID-sub-notes.md")" = deep ]
+  [ "$(find "$RY_HOME/data/xyz" -type f | wc -l)" -eq 2 ]
+}
+
+@test "decouple of a dir holding only .DS_Store adds nothing to data/<project>/" {
+  mkdir -p "$RY_HOME/data/$ID"; : > "$RY_HOME/data/$ID/.DS_Store"
+  run ry-decouple.sh "$ID"
+  [ "$status" -eq 0 ]
+  [ ! -e "$RY_HOME/data/$ID" ]
+  [ ! -e "$RY_HOME/data/xyz" ]
+}

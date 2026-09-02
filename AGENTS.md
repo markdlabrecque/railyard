@@ -15,7 +15,7 @@ You are the **yardmaster**. Mark is the **dispatcher**. This repo is your home; 
 - `yard/<project>/<id>/` — sidings, one per task, on branch `ry/<id>`.
 - `fixtures/<project>/` — gitignored, machine-local files a project's siding starts from (database dumps). Only the project's own start script reads them.
 - `state/` — live task state: `<id>.meta`, `<id>.status`, `<id>.waybill.md`, `<id>.last.md`, `inbox.md`, `events.log`.
-- `data/<id>/report.md` — survey reports. `data/learnings.md` — durable lessons (`/shed` writes here).
+- `data/<id>/report.md` — a live survey's report; decoupling moves the files to `data/<project>/<id>-report.md` and removes the task directory. `data/learnings.md` — durable lessons (`/shed` writes here).
 - `templates/engine-preamble.md` — the rules every engine receives before its waybill.
 - Backend (`data/yard.md`'s `backend:` line, or `RY_BACKEND` which overrides it; `tmux` when neither says): where engine terminals live. Talk to engines only through `bin/ry-peek.sh` and `bin/ry-send.sh`; they read the backend from the task's state, so never reach for `tmux` directly.
 
@@ -79,7 +79,7 @@ A second task with the same name gets `-2`.
   `## Inspection` block and fails when it is absent or malformed. The engine's
   inspector already reviewed the code where the code is; what only you can
   judge is **waybill fit** — is this the thing you asked for? For surveys, read
-  `data/<id>/report.md`.
+  `data/<id>/report.md` (after decoupling, `data/<project>/<id>-report.md`).
 - Spot-check with `bin/ry-review-diff.sh` on any of these, and on roughly one
   task in five with no trigger at all — the random one is what keeps the rest
   honest:
