@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Fake sleep. Records what it was asked to wait and returns at once, so a test
+# can assert the retry's interval instead of timing the machine -- `date +%s`
+# has one-second resolution, so a zero-sleep retry that crosses a second
+# boundary reads as a whole second and the assertion flakes.
+#
+# Its own directory, not tests/fakebin/: that one is on PATH for every backend
+# test, and a sleep that never sleeps there would quietly break anything
+# waiting on a watchdog or a poll.
+printf '%s\n' "$1" >> "$RY_FAKE_SLEEP_LOG"

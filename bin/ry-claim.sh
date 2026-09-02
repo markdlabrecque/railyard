@@ -75,7 +75,16 @@ case $action in
 
   take)
     self=$(ry_backend_self)
-    [ -n "$self" ] || ry_die "this session has no $(ry_backend) terminal to hold the yard with"
+    if [ -z "$self" ]; then
+      # No terminal id means the yard is looking for the wrong kind of terminal
+      # far more often than it means this session has none. Name both sides:
+      # --force is no help here, and the fix is the backend, not the session.
+      looks=$(ry_backend_looks_like)
+      if [ -n "$looks" ] && [ "$looks" != "$(ry_backend)" ]; then
+        ry_die "$(ry_backend_whence) says $(ry_backend), but this session is a $looks terminal. Set the backend to $looks (data/yard.md, or RY_BACKEND for a one-off) and take the yard again. --force does not cover this."
+      fi
+      ry_die "this session has no $(ry_backend) terminal to hold the yard with. Start the session inside $(ry_backend), or set the backend to the one hosting it (data/yard.md, or RY_BACKEND for a one-off). --force does not cover this."
+    fi
     if [ -n "$held" ] && [ "$held" != "$self" ] && $alive && ! $force; then
       ry_die "$held on $held_backend still holds the yard and its terminal is alive. Taking it from a live yardmaster leaves two of us on one inbox. If that terminal's agent is gone, say so with --force."
     fi

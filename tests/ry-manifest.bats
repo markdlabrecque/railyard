@@ -64,3 +64,23 @@ setup() { setup_home; make_project xyz; }
   [ "$status" -eq 0 ]
   [[ "$output" == *"no tasks"* ]]
 }
+
+@test "a finished task's row also shows the inspection's risk line" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  echo turn-ended > "$RY_HOME/state/$A.status"
+  printf 'DONE: fixed it\n\n## Inspection\n- inspector: ran\n- suite: bats tests/ — 5 passed, 0 failed\n- must-fix: 0 raised\n- revert check: tests/ry-foo.bats:1\n- risk: medium — touches auth\n' > "$RY_HOME/state/$A.last.md"
+  run ry-manifest.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"DONE: fixed it"* ]]
+  [[ "$output" == *"- risk: medium — touches auth"* ]]
+}
+
+@test "the board's risk line comes from the inspection block, not from prose" {
+  A=$(ry-dispatch.sh --haul xyz "fix login" | sed -n 's/^id=//p')
+  echo turn-ended > "$RY_HOME/state/$A.status"
+  printf 'DONE: fixed it\n\n## Notes\n- risk: high — quoted from the waybill, not a verdict\n\n## Inspection\n- inspector: ran\n- risk: low — one line changed\n' > "$RY_HOME/state/$A.last.md"
+  run ry-manifest.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"- risk: low — one line changed"* ]]
+  [[ "$output" != *"quoted from the waybill"* ]]
+}

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Launch the engine for a dispatched id in the configured backend.
 # Builds the prompt from templates/engine-preamble.md + the waybill, writes
-# state/<id>.settings.json (Claude hooks: Stop -> ry-engine-stop.sh),
-# pre-trusts the siding in ~/.claude.json (RY_CLAUDE_JSON overrides) so no
-# trust dialog blocks the engine, opens the backend window, marks running.
+# state/<id>.settings.json (Claude hooks: Stop -> ry-engine-stop.sh) and
+# merges the same hook into the siding's own .claude/settings.local.json (a
+# --resume relaunch drops --settings, so the hook must live there too --
+# issue #5), pre-trusts the siding in ~/.claude.json (RY_CLAUDE_JSON
+# overrides) so no trust dialog blocks the engine, opens the backend window,
+# marks running.
 #
 # usage: ry-engine-launch.sh <id>
 # env:   RY_BACKEND=tmux|orca|none  RY_ENGINE_CMD (default: claude --dangerously-skip-permissions)
@@ -22,14 +25,26 @@ siding=$(ry_meta_get "$id" siding)
 [ -d "$siding" ] || ry_die "siding $siding missing"
 shape=$(ry_meta_get "$id" shape); branch=$(ry_meta_get "$id" branch)
 report="$home/data/$id/report.md"; mkdir -p "$home/data/$id"
+# Written by ry-couple.sh only when the project's start script failed. The
+# {{setup}} line disappears when there is none, so the usual prompt is unchanged.
+setup="$home/state/$id.setup-failed.md"
 # Prompt = templates/engine-preamble.md with placeholders filled, waybill last.
-prompt=$(awk -v id="$id" -v shape="$shape" -v branch="$branch" -v report="$report" -v wb="$home/state/$id.waybill.md" '
+prompt=$(awk -v id="$id" -v shape="$shape" -v branch="$branch" -v report="$report" -v wb="$home/state/$id.waybill.md" -v su="$setup" '
   /\{\{waybill\}\}/ { while ((getline l < wb) > 0) print l; next }
+  /\{\{setup\}\}/ { while ((getline l < su) > 0) print l; next }
   { gsub(/\{\{id\}\}/, id); gsub(/\{\{shape\}\}/, shape); gsub(/\{\{branch\}\}/, branch); gsub(/\{\{report\}\}/, report); print }
 ' "$bindir/../templates/engine-preamble.md")
 settings="$home/state/$id.settings.json"
 
-jq -n --arg cmd "exec $bindir/ry-engine-stop.sh" '{hooks:{Stop:[{hooks:[{type:"command",command:$cmd}]}]}}' > "$settings"
+jq -n --arg cmd "exec $(printf %q "$bindir/ry-engine-stop.sh")" '{hooks:{Stop:[{hooks:[{type:"command",command:$cmd}]}]}}' > "$settings"
+
+# Belt and braces (issue #5): --settings is lost on a --resume relaunch, so
+# the hook is also registered in the siding itself, where Claude Code reads
+# project settings regardless of how the session started.
+# Ignore first, then write: a launch interrupted between the two would
+# otherwise leave an untracked mktemp sibling in the siding.
+ry_gitignore_stop_hook "$siding"
+ry_write_stop_hook "$siding" "$bindir"
 
 engine_cmd=${RY_ENGINE_CMD:-claude --dangerously-skip-permissions}
 # Env travels through the window command so the Stop hook can find home + id.
@@ -39,7 +54,11 @@ cmd+="$engine_cmd --settings $(printf %q "$settings") $(printf %q "$prompt")"
 ry_claude_trust "$siding"
 
 ry_backend_check; ry_backend_no_split
-target=$(ry_backend_open "$id" "$siding" "$cmd")
+# All-or-nothing: a terminal that never opens must leave no trace in the
+# meta or status, so the caller (ry-couple.sh) can tell a real launch from a
+# failed one and roll the rest of the task back rather than leave it running
+# nowhere.
+target=$(ry_backend_open "$id" "$siding" "$cmd") || ry_die "could not open a terminal for $id"
 printf 'backend=%s\ntarget=%s\n' "$(ry_backend)" "$target" >> "$home/state/$id.meta"
 ry_set_status "$id" running
 printf 'launched %s\n' "$id"

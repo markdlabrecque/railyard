@@ -11,6 +11,26 @@ projects and never edits them — every change is an **engine's** job.
 Vocabulary is in [`../CONTEXT.md`](../CONTEXT.md); why it works this way is in
 [`prd.md`](prd.md). This is how to use it.
 
+## First run
+
+A fresh clone carries no configuration. Both files that configure a yard —
+`data/yard.md` (the backend) and `data/projects.md` (the registered projects) —
+are machine-local and gitignored, so they do not travel with the repo. Until
+you write them, this is a tmux yard with no projects, and the first yardmaster
+session says so instead of leaving you to find out. Create them by hand:
+
+```sh
+mkdir -p data
+echo '- `backend: tmux`' > data/yard.md     # or orca, cmux, herdr
+git clone <url> projects/myapp
+echo '- `myapp` — local-only, notes: main repo' > data/projects.md
+```
+
+[Choosing this yard's backend](#choosing-this-yards-backend) and
+[Register a project](#register-a-project) cover the fields. Once either file
+exists the notice stops: a yard with no `data/yard.md` and a project list is a
+tmux yard on purpose.
+
 ## Open the yard
 
 ```sh
@@ -54,6 +74,13 @@ tmux is the default; Orca, cmux and herdr are the other supported
 - `backend: herdr`
 ```
 
+`data/yard.md` is yours alone: it is gitignored, it is not in the repo, and it
+does not arrive with a clone — create it yourself on each machine you run a
+yard on. It holds live yard state, and tracking it puts that state at the
+mercy of git: any operation that updates the file's path — a checkout, a
+merge, a hard reset — can put an older copy back. That happened here,
+silently, with an engine running.
+
 `bin/ry-yard.sh` then opens the yard there, and carries the choice into the
 yardmaster, so every engine it dispatches lands in the same app. `RY_BACKEND`
 in the environment still wins, so a one-off override works as before; with
@@ -84,6 +111,13 @@ again. Put it in your shell profile if Orca is your normal way to work.
 
 Each engine gets its own Orca terminal titled `ry-<id>`, opened on its siding as
 an external worktree. Decoupling stops that terminal.
+
+Orca resolves that siding against its own worktree index, which it builds
+asynchronously, so a siding cut seconds earlier can still be unknown to it.
+Railyard tries the terminal three times in all, waiting
+`RY_ORCA_RETRY_SLEEP` seconds (2 by default) between tries — more than the race
+has ever needed. If all three miss, the dispatch fails as a whole: see
+[When a dispatch fails](#when-a-dispatch-fails).
 
 Nothing about the daily loop changes. The only differences:
 
@@ -138,7 +172,7 @@ apps has engines that go dark the moment one of them is quit. Dispatching or
 coupling onto a second backend is refused:
 
 ```
-error: this yard already has engines on herdr (xyz-0830-1412-3f9a), and tmux
+error: this yard already has engines on herdr (16-name-work-by-ticket), and tmux
 would split it. ...
 ```
 
@@ -235,11 +269,18 @@ backend gets `railyard-herdr-2` rather than stealing the first one's client.
 git clone <url> projects/<name>
 ```
 
-Then add a line to [`../data/projects.md`](../data/projects.md):
+Then add a line to `data/projects.md`, creating the file if it is not there:
 
-```
+```text
 - `myapp` — pr, base: develop, notes: main repo
 ```
+
+Like `data/yard.md`, `data/projects.md` is machine-local: gitignored, not in
+the repo, and absent from a fresh clone. It holds live yard state, and a
+tracked file can be put back to an older copy by any git operation that
+updates its path — a checkout, a merge, a hard reset. It also lists the
+clones under `projects/`, which are this machine's — another machine's yard
+registers its own.
 
 `name` must match the directory under `projects/`. Both other fields are
 optional:
@@ -249,6 +290,142 @@ optional:
 - **base** — the branch sidings are cut from and merged back into. Defaults to
   `develop` when the project has one, otherwise the remote's default branch.
   Railyard never touches your release branch.
+
+## Fixtures
+
+`fixtures/` at the railyard root holds the machine-local files a project's
+siding needs to start from — a database dump being the obvious case. One
+directory per project:
+
+```
+fixtures/
+  myapp/
+    db.sql.gz
+```
+
+It is gitignored, like `projects/`, `yard/`, `state/` and `data/<id>/`, because
+these files are large, machine-local, and often contain client data. Nothing in
+railyard reads them; they exist for the project's own start script.
+
+Railyard creates `fixtures/<project>/` when it couples a siding, so a start
+script can rely on the directory existing and simply find it empty. Drop the
+files in yourself; nothing else does.
+
+## What railyard writes into a siding
+
+Two files, both gitignored, neither ever committed:
+
+- `.ddev/config.local.yaml` — the siding's own DDEV project name, for a project
+  that has `.ddev/`. See above.
+- `.claude/settings.local.json` — the engine's Stop hook, the one thing that
+  tells railyard a turn ended.
+
+The hook is also passed on the `claude` command line as `--settings`, and that
+used to be the only place it lived. It was not enough. Anything that relaunches
+the session with `--resume` — a crash recovery, a terminal app restoring its
+windows — drops every other argument with it, and the engine goes on working
+while railyard hears nothing, forever. A survey once finished a 594-line report
+that way and no one knew (#5).
+
+So the hook is registered in the siding as well, where Claude Code reads it on
+every launch regardless of how the session started. Two registrations, still
+one report: Claude Code fires an identical hook command once however many
+settings sources name it.
+
+If the project does not already ignore `.claude/settings.local.json`, railyard
+adds `.claude/settings.local.json*` to the clone's `.git/info/exclude` rather
+than editing the project's `.gitignore` — the trailing `*` so that a launch
+killed mid-write leaves no stray temp file behind to dirty the siding. Nothing
+railyard writes into a siding is the project's business.
+
+## The worktree start script
+
+A fresh siding is a bare git worktree. For a project that needs a database or a
+warmed-up environment before anything can be verified, that is not enough — and
+an engine should never have to improvise it, nor a waybill carry environment
+instructions that have nothing to do with the task.
+
+So a project may set up its own sidings. Put an executable script here, inside
+the project repo, where it is versioned alongside the code it sets up:
+
+```
+.railyard/worktree-start.sh
+```
+
+That is the whole declaration: railyard looks at that one path, and does
+nothing at all when it is absent. No config line, no registration.
+
+### The contract
+
+| | |
+|---|---|
+| **Path** | `.railyard/worktree-start.sh` in the project repo. Found by path or not at all. |
+| **When** | At couple time: after the siding is cut and after its `.ddev/config.local.yaml` name override is written, before the engine launches. So `ddev` is safe to call. |
+| **Shape** | Runs for every task, hauls and surveys alike. |
+| **Interpreter** | `bash`, unless the file is executable *and* starts with a `#!` line — then that shebang is honoured, so a start script may be Python or anything else. Never `/bin/sh`: it is bash on macOS and dash on Debian and Ubuntu, so a script that relied on it would work on one machine and not the other. Give a non-bash script both a shebang and the execute bit; without them it runs under bash. |
+| **Working directory** | The siding. |
+| **Output** | stdout and stderr, captured to `state/<id>.start.log`. That log is the record of what setup did; nothing streams anywhere else. |
+| **Timeout** | 600 seconds, then the script and its children are killed. |
+| **Failure** | Never blocks the dispatch. |
+| **Trust** | None needed. It is the project's own script. |
+
+### Environment
+
+| Variable | |
+|---|---|
+| `RY_FIXTURE_PATH` | **`fixtures/<project>/` — the project's own directory, not the `fixtures/` root.** A start script never has to know its project's directory name; read this and look inside. Railyard creates it if it is missing, so it always exists and may be empty. |
+| `RY_SIDING` | The siding's path. Same as `$PWD`. |
+| `RY_PROJECT` | The project name, as it appears under `projects/`. |
+| `RY_ID` | The task id. Useful for a per-siding resource name. |
+| `RY_HOME` | The railyard root. |
+| `RY_BIN` | Railyard's `bin/`. |
+| `RY_BACKEND` | Where the engine's terminal will live. |
+
+A DDEV project's name is already set for you, in the siding's gitignored
+`.ddev/config.local.yaml`, so `ddev start` in the script gets this siding's own
+project rather than colliding with another one. Read the name from there if the
+script needs it; do not invent one.
+
+Everything else is the script's own business. Railyard does not care what it
+does, only whether it exited.
+
+### When it fails
+
+A failing start script does not abort the dispatch. Three things happen and
+then the engine launches anyway:
+
+1. The exit status and the log path become an inbox line, so the yardmaster
+   sees it without polling:
+   `[railyard] engine <id> start-script-failed: exit 3; output in state/<id>.start.log`
+2. The engine is told, in its own prompt, that setup failed and why — and told
+   plainly that repairing the script is not its job. It carries on if the task
+   does not need the environment (a read-only survey usually does not) and
+   reports `BLOCKED` if it does. It never fabricates a result it could not
+   verify.
+3. `ry-couple.sh` says so on stderr, so a dispatch never quietly opens onto a
+   broken environment.
+
+Nobody reruns the script by hand. The engine is still working in that siding,
+so a rerun would move the worktree and the database under it while the engine
+still holds the original "setup failed" notice. Fixing a project's setup is a
+change to a project, which means a new engine on a fresh siding — after the
+affected one has been stopped or decoupled.
+
+A script that hangs is worse than one that fails: it would hold the dispatch
+open with no engine and no inbox line. So it is killed after **600 seconds**,
+along with anything it started, and reported as a timeout rather than an exit
+status — the two mean different things to whoever debugs it:
+
+```
+[railyard] engine <id> start-script-failed: timeout 600s; output in state/<id>.start.log
+```
+
+`RY_START_TIMEOUT` overrides the bound, in seconds. It must be a whole number
+of at least 1; anything else (a typo, a unit suffix) is refused out loud on
+stderr and the 600-second default is used instead, because an unusable bound
+would leave the watchdog never firing — exactly the hang it exists to prevent.
+It exists so the test suite does not sit for ten minutes; there is no reason to
+set it by hand.
 
 ## The daily loop
 
@@ -262,12 +439,35 @@ The yardmaster decides two things per task and tells you what it picked:
 - **mode** — from the project's registered mode. Say "use local-only for this
   one" to override.
 
+**Naming.** A task is named after the work, not after railyard. With a ticket
+the id is `<number>-<slug>` — `3-fixtures-start-script`; without one it is the
+slug alone — `news-filter-styling`. That id is the siding directory, the branch
+(`ry/<id>`) and every `state/<id>.*` file. Two tasks on one ticket is normal, so
+the second gets `-2`. The yardmaster picks the slug; you can name it yourself in
+the ask, and ids made before this scheme keep working.
+
+In what the yardmaster says back to you, a ticket is `#N` and a pull or merge
+request is `!N` — the same on GitHub and GitLab, so the two never blur. Task
+ids, branch names and commit hashes are mechanics: they come after the outcome,
+if at all.
+
 **Wait.** The turn ends. You get on with your day. When the engine finishes,
 the watcher wakes the yardmaster with the engine's own one-line handoff.
 
-**Review.** The yardmaster reads the diff (`bin/ry-review-diff.sh <id>`) or the
-survey report, judges it against the waybill, and brings you the outcome plus
-the one decision you need to make.
+**Review.** The engine reviews its own work before it hands off: on any haul
+that touches code or tests it spawns an **inspector** — a fresh, read-only
+agent that never saw the engine's reasoning — which re-runs the suite itself
+and names one assertion that fails when the change is reverted. The engine
+fixes what the inspector raises, or rejects it in writing, and reports the lot
+in an `## Inspection` block in its handoff. Review happens where the code is.
+
+The yardmaster reads that block (`bin/ry-verdict.sh <id>`, which fails when the
+block is missing or malformed) or the survey report, judges it against the
+waybill — the one thing the inspector cannot judge, because only the yardmaster
+holds your request — and brings you the outcome plus the one decision you need
+to make. It still pulls the diff (`bin/ry-review-diff.sh --stat <id>` first) on
+a handful of named triggers and on a random sample, which is what keeps the
+inspector honest.
 
 That decision is always yours. `DONE` from an engine is a claim, not an
 approval. Merging, pushing, dropping work, and decoupling a siding with
@@ -278,8 +478,30 @@ uncommitted changes each need your explicit word, for that specific task.
 | mode | what happens |
 | --- | --- |
 | `local-only` | `bin/ry-merge-local.sh [--push] <id>` — fast-forwards the base branch in your clone |
-| `pr` | `bin/ry-pr.sh <id>` — pushes the branch, opens the PR/MR, then the watcher polls CI and tells you when it merges or the checks fail |
+| `pr` | `bin/ry-pr.sh [--auto-merge] <id>` — pushes the branch, opens the PR/MR, then the watcher polls it until it merges and tells you when it is ready to merge (`pr-ready`, with the count and worst severity of the unresolved reviewer findings), when no check ran at all (`pr-no-checks`), when it conflicts (`pr-conflict`), when checks fail, and when it merges |
 | survey | nothing to merge; the findings are the deliverable |
+
+`--auto-merge` (default method `merge`; `--auto-merge-method squash|rebase` to
+change it) opts a `pr` task in to arming the forge's own auto-merge once it is
+safe, instead of you merging it by hand. `ry-pr.sh` only records the choice —
+it never arms anything itself, because a check usually does not exist for
+seconds to minutes after the push. The watcher then runs `bin/ry-auto-merge.sh
+<id>` on the same cadence as the PR poll: it reads the forge's own view of the
+PR head and refuses to arm until at least one check that can actually report a
+verdict has been created for that exact commit — a rollup of nothing but
+`skipped` or `neutral` is not a check, and neither is a pipeline for an older
+sha. That gate exists because GitHub and GitLab auto-merge both fire against
+"nothing pending", not "checks passed" — arming the instant a PR opens, before
+CI or a review bot has even started, would merge it unreviewed.
+
+Arming writes the gated sha to `state/<id>.auto-armed`. The watcher keeps
+looking after that, because GitHub leaves auto-merge enabled across a later
+push: if the head moves off the armed sha, railyard disables auto-merge again
+and re-gates the new commit from scratch (`auto-merge-disarmed`). Every
+non-arming outcome — `auto-merge-waiting`, `auto-merge-blocked` — is reported
+once per situation, not once per poll. The merge itself is still observed and
+reported the normal way, through `pr-merged`, which is what couples anything
+queued behind the task.
 
 **Decouple.** `bin/ry-decouple.sh [--delete-branch] <id>` kills the window,
 removes the siding, and archives the state.
@@ -309,10 +531,10 @@ each queued task is waiting on:
 
 ```
 QUEUED
-  myapp-0830-1244-6a3d  myapp  haul  pr  4m
-      waiting on myapp-0830-1244-994b
+  #12  12-news-filter-styling  myapp  haul  pr  4m
+      waiting on 11-news-filter-query
 RUNNING
-  myapp-0830-1244-994b  myapp  haul  pr  9m
+  #11  11-news-filter-query  myapp  haul  pr  9m
 inbox: 0 unread
 ```
 
@@ -331,10 +553,38 @@ that enforces it — the engine preamble, `AGENTS.md`, a project's line in
 so you see the whole queue before anything goes. Nothing accumulates, and
 nothing is carried forward undecided.
 
+## When a dispatch fails
+
+Cutting the siding and opening the engine's terminal are one step, not two. If
+the terminal cannot be opened, `bin/ry-dispatch.sh` rolls the whole dispatch
+back: the worktree is removed, its `ry/<id>` branch is deleted, and the task's
+`state/` files go with it. Nothing half-built is left behind, so a dispatch
+either produced a running engine or produced nothing.
+
+You are told plainly, and the failure is also an inbox line, so it is never a
+dispatch that merely looked quiet. The recovery is to dispatch the task again —
+there is no siding left to launch into.
+
+A task that was already queued (`--after`) is the one exception. Its meta and
+waybill survive, because you already know about that task; only its siding is
+rolled back and it goes back to `queued`, ready to be coupled again.
+
+The rollback is for a failed launch and nothing else. A dispatch that fails
+earlier — a base branch that has diverged, a `--prefix` DDEV cannot use — says
+so and leaves the task `queued` with everything it had, because those are worth
+fixing rather than redoing. That message says which of the two happened.
+
 ## When something goes wrong
 
 **`engine <id> silent for Nm`** — a running engine ended no turn. Look at it:
-`bin/ry-peek.sh <id>`.
+`bin/ry-peek.sh <id>`. It is still able to report; it just has not.
+
+**`engine <id> not reporting`** — worse, and a different thing. That engine's
+siding no longer registers railyard's Stop hook, so it *cannot* report a turn
+end however long you wait. The work may well be finished. Peek at the window,
+read `data/<id>/report.md` or the siding's commits, and judge the outcome
+yourself; the engine will never tell you. Sidings cut before railyard wrote the
+hook into the siding are the usual cause.
 
 **`engine <id> waiting for input`** — the same thing, spotted at once instead
 of waited out: the backend says that engine's agent is sitting at a prompt.
@@ -357,17 +607,19 @@ instructions into the engine's window; it keeps its context and carries on.
 | --- | --- |
 | `bin/ry-yard.sh` | open or attach to the yard |
 | `bin/ry-view.sh [--dry-run] <herdr\|orca\|cmux>` | open a viewer onto a tmux-hosted yard |
-| `bin/ry-dispatch.sh --haul\|--survey [--mode <m>] [--base <b>] [--after <id>] <project> "<waybill>"` | dispatch or queue a task |
+| `bin/ry-dispatch.sh --haul\|--survey [--mode <m>] [--base <b>] [--after <id>] [--ticket <n>] [--slug <text>] <project> "<waybill>"` | dispatch or queue a task |
 | `bin/ry-manifest.sh` | every task not yet decoupled |
 | `bin/ry-inbox.sh [--ack]` | unread engine events |
 | `bin/ry-deps.sh <id>` | is a queued task ready, pending, or stranded |
 | `bin/ry-couple.sh <id>` | cut a queued task's siding by hand |
 | `bin/ry-peek.sh <id>` | recent output from an engine's terminal |
 | `bin/ry-send.sh <id> "<text>"` | send follow-up text to an engine |
-| `bin/ry-review-diff.sh <id>` | an engine's commits and diff |
+| `bin/ry-review-diff.sh [--stat] <id>` | an engine's commits and diff; `--stat` for the file list alone |
+| `bin/ry-verdict.sh <id>` | an engine's inspection block; non-zero when it is missing or malformed |
 | `bin/ry-merge-local.sh [--push] <id>` | fast-forward the base branch |
-| `bin/ry-pr.sh <id>` | open the PR/MR |
+| `bin/ry-pr.sh [--auto-merge] <id>` | open the PR/MR |
 | `bin/ry-pr-poll.sh <id>` | check an open PR once, by hand |
+| `bin/ry-auto-merge.sh <id>` | arm auto-merge once a check exists for the head commit, by hand |
 | `bin/ry-decouple.sh [--force] [--delete-branch] <id>` | remove the siding, archive the state |
 | `bin/ry-claim.sh [--held\|--json\|--release\|--take] [--force]` | look at, test, drop or take the yard claim |
 

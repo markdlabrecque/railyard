@@ -2,3 +2,8 @@ projects/
 yard/
 state/
 data/*/
+fixtures/
+db/*
+data/yard.md
+data/projects.md
+data/learnings.md

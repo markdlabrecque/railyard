@@ -1,4 +1,14 @@
 # Shared bats helpers for railyard.
+
+# Hermetic environment. Engines export RY_ID, RY_HOME, RY_BIN and RY_BACKEND
+# into their terminal, and bin/ry-session-start.sh correctly stands down when
+# RY_ID is set — so a suite that inherits an engine's environment tests the
+# stand-down path instead of the behaviour it asserts. This runs at `load`
+# time, which is the only seam every test file must pass through: `load
+# helpers` precedes setup(), so it lands before any test body, and a new file
+# cannot forget it the way it could forget setup_home. Tests that need these
+# variables set them themselves, per command.
+unset RY_ID RY_HOME RY_BIN RY_BACKEND
 setup_home() {
   export RY_HOME
   RY_HOME="$(mktemp -d "${BATS_TEST_TMPDIR}/home.XXXX")"
@@ -85,6 +95,11 @@ setup_cmux() {
 setup_orca() {
   export RY_BACKEND=orca
   export RY_FAKE_ORCA_LOG="$BATS_TEST_TMPDIR/orca.log" RY_FAKE_ORCA_REPOS="$BATS_TEST_TMPDIR/orca-repos.json"
+  export RY_FAKE_ORCA_WORKTREES="$BATS_TEST_TMPDIR/orca-worktrees.txt"
+  export RY_FAKE_ORCA_CREATE_COUNTER="$BATS_TEST_TMPDIR/orca-create-counter"
+  rm -f "$RY_FAKE_ORCA_CREATE_COUNTER"
+  # Real orca's retry sleep is a few real seconds; tests never wait for it.
+  export RY_ORCA_RETRY_SLEEP=0
   export PATH="$BATS_TEST_DIRNAME/fakebin:$PATH"
 }
 
@@ -108,4 +123,39 @@ hold_yard() {  # <backend> <target>
 register_yard_backend() {  # <backend>
   mkdir -p "$RY_HOME/data"
   printf '# This yard\n\n- `backend: %s`\n' "$1" > "$RY_HOME/data/yard.md"
+}
+
+# ddev: fake CLI plus the log it writes.
+setup_ddev() {
+  export RY_FAKE_DDEV_LOG="$BATS_TEST_TMPDIR/ddev.log"
+  : > "$RY_FAKE_DDEV_LOG"
+  export PATH="$BATS_TEST_DIRNAME/fakebin:$PATH"
+}
+
+# Turn a project into a DDEV project: a .ddev/ directory, and the gitignore
+# line every real project has.
+make_ddev_project() {  # <name> [--tracked]
+  local name=$1 dir
+  dir="$RY_HOME/projects/$name"
+  mkdir -p "$dir/.ddev"
+  printf 'name: %s\n' "$name" > "$dir/.ddev/config.yaml"
+  if [ "${2:-}" = --tracked ]; then
+    # Actually tracked: committed, with no ignore rule. Anything less tests
+    # "not ignored", which is a different thing from "the project tracks it".
+    printf 'name: committed-by-the-project\n' > "$dir/.ddev/config.local.yaml"
+  else
+    printf '/.ddev/config.local.yaml\n' > "$dir/.gitignore"
+  fi
+  ( cd "$dir" && git add -A && git commit -qm ddev && git push -q origin HEAD )
+}
+
+# Commit a .railyard/worktree-start.sh into a project, so every siding cut from
+# it has one. Body is read from stdin.
+make_start_script() {  # <project> [--not-executable]  <<'EOF' ... EOF
+  local name=$1 dir
+  dir="$RY_HOME/projects/$name"
+  mkdir -p "$dir/.railyard"
+  cat > "$dir/.railyard/worktree-start.sh"
+  [ "${2:-}" = --not-executable ] || chmod +x "$dir/.railyard/worktree-start.sh"
+  ( cd "$dir" && git add -A && git commit -qm start-script && git push -q origin HEAD )
 }

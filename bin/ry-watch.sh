@@ -8,8 +8,9 @@
 #   2. engines with status "running" that their backend reports blocked, or
 #      untouched for RY_STALL_MIN minutes (default 20) -> one inbox line, once
 #      per engine;
-#   3. engines with status "pr-open" -> ry-pr-poll.sh every RY_PR_POLL_SEC
-#      seconds (default 120); merged / failed checks surface as events.
+#   3. tasks with a pr_url in their meta and no merge yet -> ry-pr-poll.sh
+#      every RY_PR_POLL_SEC seconds (default 120); merged, ready, conflicting
+#      and failing PRs surface as events.
 # The inbox (state/inbox.md) is the durable record; pane injection is a nudge.
 # usage: ry-watch.sh [--once]
 set -uo pipefail
@@ -35,13 +36,20 @@ event() { printf '%s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" >> "$ev
 
 pass() {
   # 2. queued tasks, 3. stalls, 4. PR polls
-  local f id age now status last_poll deps
+  local f id age now status last_poll deps siding
   now=$(date +%s)
   for f in "$st"/*.status; do
     [ -f "$f" ] || continue
     status=$(cat "$f")
     id=${f##*/}; id=${id%.status}
     if [ "$status" = queued ]; then
+      # A launch that already failed here once left this sentinel (see
+      # ry-couple.sh). Auto-coupling it again every pass would cut the
+      # worktree, rerun the project's start script and burn another 3 Orca
+      # retries -- unbounded, one inbox line and terminal nudge per pass,
+      # for a failure that has not gone anywhere. It stays queued and out of
+      # this loop until a human clears it with a manual ry-couple.sh.
+      [ ! -e "$st/$id.launch-failed" ] || continue
       deps=$("$bindir/ry-deps.sh" "$id" 2>>"$st/watch.log" || true)
       case $deps in
         state=ready*)
@@ -56,13 +64,24 @@ pass() {
       esac
       continue
     fi
-    if [ "$status" = pr-open ]; then
+    # A task with a PR is polled until that PR reaches a terminal outcome, and
+    # the trigger is pr_url in the meta, not the status. The status is written
+    # by whatever happened last — a turn end after the PR opened used to erase
+    # pr-open and with it every chance of ever seeing the merge (#10). pr_url is
+    # written once by ry-pr.sh and never moves.
+    if [ "$status" != merged ] && [ -s "$st/$id.meta" ] &&
+       grep -q '^pr_url=' "$st/$id.meta"; then
       last_poll=$(cat "$st/$id.pr-polled" 2>/dev/null || echo 0)
       if [ $((now - last_poll)) -ge "$pr_poll_sec" ]; then
         printf '%s\n' "$now" > "$st/$id.pr-polled"
         "$bindir/ry-pr-poll.sh" "$id" >/dev/null 2>>"$st/watch.log" || true
+        # Same cadence as the poll: ry-auto-merge.sh reads the forge and, on
+        # GitLab, sleeps while mergeability settles. At the watcher's own
+        # 2s interval that would flood the forge and stall every other task.
+        if grep -q '^auto_merge=' "$st/$id.meta"; then
+          "$bindir/ry-auto-merge.sh" "$id" >/dev/null 2>>"$st/watch.log" || true
+        fi
       fi
-      continue
     fi
     [ "$status" = running ] || continue
     [ -e "$st/$id.stall-warned" ] && continue
@@ -73,7 +92,20 @@ pass() {
     fi
     age=$(( (now - $(ry_mtime "$f")) / 60 ))
     if [ "$age" -ge "$stall_min" ]; then
-      post "[railyard] engine $id silent for ${age}m (status running, no turn end); check window ry-$id"
+      # A stalled engine whose siding still registers the Stop hook is
+      # probably just thinking; one that does not can never report on its own
+      # (issue #5) and needs a distinct line so the yardmaster knows to peek.
+      # ry_meta_get dies on a missing meta, and pass() is not a subshell: an
+      # unreadable meta would take the whole daemon down, which is the silent
+      # and total failure #5 is about. An engine whose siding cannot be read at
+      # all -- no meta, or the directory gone -- is reported as silent, the
+      # older and weaker of the two claims: never accuse a siding unread.
+      siding=$(ry_meta_get "$id" siding 2>/dev/null || true)
+      if [ -z "$siding" ] || [ ! -d "$siding" ] || ry_stop_hook_registered "$siding"; then
+        post "[railyard] engine $id silent for ${age}m (status running, no turn end); check window ry-$id"
+      else
+        post "[railyard] engine $id not reporting for ${age}m: its siding ($siding) registers no Stop hook, so no turn end can ever arrive (issue #5); peek at window ry-$id -- the work may already be done"
+      fi
       : > "$st/$id.stall-warned"
     fi
   done

@@ -125,3 +125,84 @@ teardown() {
   [ "$status" -eq 0 ]
   [ "$(claim_target)" = "$pane" ]
 }
+
+# data/yard.md and data/projects.md are machine-local and gitignored, so a
+# fresh clone has neither and the readers quietly fall back to a tmux yard with
+# no projects. The first session in such a clone says so once.
+@test "a fresh clone is told it has no yard config yet" {
+  git init -q "$RY_HOME"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"First run"* ]]
+  [[ "$output" == *"data/yard.md"* ]]
+  [[ "$output" == *"you are the yardmaster"* ]]
+}
+
+@test "a configured yard gets no first-run notice, and neither does a non-clone" {
+  git init -q "$RY_HOME"
+  mkdir -p "$RY_HOME/data"; printf -- '- `backend: tmux`\n' > "$RY_HOME/data/yard.md"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [[ "$output" != *"First run"* ]]
+  rm "$RY_HOME/data/yard.md"; register_project demo local-only
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [[ "$output" != *"First run"* ]]
+  rm -rf "$RY_HOME/data" "$RY_HOME/.git"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [[ "$output" != *"First run"* ]]
+}
+
+# state/open-decisions.md is a live-state queue, mirrored on data/learnings.md:
+# items awaiting the dispatcher's word (unanswered decisions, undispatched
+# asks, review judgments). The summary names it the same way it names unfiled
+# learnings — a count, the path, and a pointer to where AGENTS.md documents it.
+@test "session start reports open decisions" {
+  mkdir -p "$RY_HOME/state"
+  printf '# Open decisions\n\n- abcd1234: merge or drop?\n- efgh5678: undispatched — needs project name\n' > "$RY_HOME/state/open-decisions.md"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"2 open decision(s)"* ]]
+  [[ "$output" == *"open-decisions.md"* ]]
+  [[ "$output" == *"AGENTS.md"* ]]
+  [[ "$output" == *"decision"* ]]
+}
+
+@test "no open-decisions.md means the summary says nothing about decisions" {
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [ ! -e "$RY_HOME/state/open-decisions.md" ]
+  [[ "$output" != *"open-decisions"* ]]
+  [[ "$output" != *"decision"* ]]
+}
+
+@test "an empty or header-only open-decisions.md is not reported" {
+  mkdir -p "$RY_HOME/state"
+  : > "$RY_HOME/state/open-decisions.md"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"open-decisions"* ]]
+  [[ "$output" != *"decision"* ]]
+
+  printf '# Open decisions\n\n' > "$RY_HOME/state/open-decisions.md"
+  TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"open-decisions"* ]]
+  [[ "$output" != *"decision"* ]]
+}
+
+@test "an engine never sees open-decisions output" {
+  mkdir -p "$RY_HOME/state"
+  printf '%s\n' '- some-id: pending call' > "$RY_HOME/state/open-decisions.md"
+  RY_ID=proj-0101-0000-abcd TMUX_PANE=%7 run ry-session-start.sh <<<'{}'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# Regression guard for the hermetic environment established in tests/helpers.bash.
+# Inside an engine siding RY_ID and friends are exported into the terminal;
+# without the unset at load time this test fails, and so do the eleven tests
+# above it that drive session start through the real script.
+# RY_HOME and RY_BACKEND are not checked: setup_home always overwrites them.
+@test "the suite runs with no ambient yard environment" {
+  [ -z "${RY_ID:-}" ]
+  [ -z "${RY_BIN:-}" ]
+}

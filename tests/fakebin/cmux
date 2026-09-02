@@ -22,6 +22,10 @@ opt() {  # <name> <args...> -> the value after --name
 case ${1:-} in
   ping) echo "OK" ;;
   new-workspace)
+    if [ -n "${RY_FAKE_CMUX_FAIL_OPEN:-}" ]; then
+      echo "Error: fake-induced failure" >&2
+      exit 1
+    fi
     title=$(opt --name "$@")
     uuid="ws-fake-$(wc -l < "$ws" 2>/dev/null | tr -d ' ')"
     printf '%s %s\n' "$uuid" "$title" >> "$ws"

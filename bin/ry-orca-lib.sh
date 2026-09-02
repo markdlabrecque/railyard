@@ -18,8 +18,28 @@ ry_orca_ensure_repo() {  # <repo-dir>: register with Orca if not already
 }
 
 ry_orca_open() {  # <title> <siding> <command> -> handle
-  local out
-  out=$(orca terminal create --worktree "path:$2" --title "$1" --command "$3" --json)
+  # Orca resolves --worktree path:<siding> against a worktree index it builds
+  # asynchronously, so `terminal create` for a siding cut moments earlier can
+  # answer selector_not_found even though the siding is real -- a race, not a
+  # real error. Retry it (3 attempts total), re-probing the index between
+  # tries so the retry is actually waiting on something rather than just
+  # hoping. Any other error code is real on the first try, so it fails there.
+  #
+  # The CLI exits 1 on failure. A bash function inherits errexit from
+  # whatever sourced it, not its own setting, so a bare `out=$(orca ...)`
+  # here would abort the whole retry loop -- and the calling script with it
+  # -- on attempt 1 of a race this loop exists to survive. `|| true` on both
+  # reads keeps the failure inside the loop, where the ok/error.code checks
+  # below decide whether it is worth a retry.
+  local out attempt code
+  for attempt in 1 2 3; do
+    out=$(orca terminal create --worktree "path:$2" --title "$1" --command "$3" --json) || true
+    [ "$(jq -r '.ok' <<<"$out" 2>/dev/null)" = true ] && break
+    code=$(jq -r '.error.code // empty' <<<"$out" 2>/dev/null) || true
+    [ "$code" = selector_not_found ] && [ "$attempt" -lt 3 ] || break
+    orca worktree list --json >/dev/null 2>&1 || true
+    sleep "${RY_ORCA_RETRY_SLEEP:-2}"
+  done
   ry_orca_ok "$out"
   jq -r '.result.terminal.handle // .result.handle // empty' <<<"$out"
 }

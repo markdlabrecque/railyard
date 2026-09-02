@@ -62,3 +62,64 @@ setup() { setup_home; make_project xyz; }
   b=$(ry-dispatch.sh --haul xyz "b" | sed -n 's/^id=//p')
   [ "$a" != "$b" ]
 }
+
+# The waybill's first line is the PR/MR title. Refused here, at the one moment
+# it is cheap to fix, rather than by the forge after ry-pr.sh has pushed.
+@test "a waybill whose first line is over the cap is refused, and cuts no siding" {
+  long="A really long prose first line of the kind every waybill on disk opened with before this rule existed."
+  [ "${#long}" -gt 80 ]
+  run ry-dispatch.sh --haul --mode pr xyz "$long"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"80"* ]]
+  [[ "$output" == *"${#long}"* ]]
+  # nothing written, nothing cut, no branch left behind
+  [ -z "$(ls "$RY_HOME/state")" ]
+  [ -z "$(ls -A "$RY_HOME/yard")" ]
+  [ -z "$(git -C "$RY_HOME/projects/xyz" for-each-ref --format='%(refname)' 'refs/heads/ry/*')" ]
+}
+
+@test "the cap is on the first line only: line 1 at exactly 80 is fine, 81 is not" {
+  at80=$(printf 'b%.0s' $(seq 1 80))
+  id=$(ry-dispatch.sh --haul xyz "$at80
+
+A body of prose as long as it likes, well past eighty characters, on line three." \
+    | sed -n 's/^id=//p')
+  [ -n "$id" ]
+  [ "$(head -n1 "$RY_HOME/state/$id.waybill.md")" = "$at80" ]
+  run ry-dispatch.sh --haul xyz "$(printf 'c%.0s' $(seq 1 81))"
+  [ "$status" -ne 0 ]
+}
+
+@test "surveys are held to the same cap as hauls" {
+  run ry-dispatch.sh --survey xyz "$(printf 'd%.0s' $(seq 1 81))"
+  [ "$status" -ne 0 ]
+  [ -z "$(ls "$RY_HOME/state")" ]
+}
+
+@test "a blank first line is refused too: the title is not optional" {
+  run ry-dispatch.sh --haul xyz "
+
+The body starts here, and line 1 is where the title should have been."
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"blank"* ]]
+  [ -z "$(ls "$RY_HOME/state")" ]
+  run ry-dispatch.sh --haul xyz "   "
+  [ "$status" -ne 0 ]
+  [ -z "$(ls "$RY_HOME/state")" ]
+}
+
+# The cap lives in three places: RY_TITLE_MAX, and the two documents that bind
+# the people who have to obey it. Changing the number in one of them is AC7
+# rotting behind a green suite, so the suite reads all three.
+@test "the waybill title rule is stated where it binds, with the same cap" {
+  cap=$(bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-lib.sh'; printf %s \"\$RY_TITLE_MAX\"")
+  [ "$cap" = 80 ]
+  for f in "$BATS_TEST_DIRNAME/../AGENTS.md" \
+           "$BATS_TEST_DIRNAME/../templates/engine-preamble.md"; do
+    grep -qi 'first line' "$f" || { echo "$f does not mention the first line"; false; }
+    grep -qi 'title' "$f"      || { echo "$f does not call it a title"; false; }
+    grep -q "$cap characters" "$f" \
+      || { echo "$f does not state the cap as $cap characters"; false; }
+    grep -q 'line 3' "$f" || { echo "$f does not say the body starts on line 3"; false; }
+  done
+}

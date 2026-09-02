@@ -25,11 +25,25 @@ _Avoid_: first mate, orchestrator, main agent, supervisor
 One worker agent, running in its own siding, working one task to a handoff.
 _Avoid_: crewmate, worker, subagent, child
 
+**Inspector**:
+A read-only agent an engine spawns inside its own siding to review the work
+before it hands off. Fresh context: it sees the artifacts, never the engine's
+reasoning. It is not the yardmaster's `bin/ry-review-diff.sh`, and it holds no
+authority — it raises findings, the engine answers them.
+_Avoid_: reviewer, checker, QA
+
 ### Work
 
 **Task**:
 One unit of dispatched work. Has exactly one shape, one project, one engine, one
 siding, and one id.
+
+**Id**:
+A task's name, and the one the dispatcher uses: `<ticket>-<slug>` when the work
+has a ticket (`3-fixtures-start-script`), the slug alone when it does not
+(`news-filter-styling`). A second task of the same name gets `-2`. It is the
+siding directory, the branch `ry/<id>`, and every `state/<id>.*` file.
+_Avoid_: task name, slug
 
 **Shape**:
 Whether a task changes code or only reads it — `haul` or `survey`. Fixed at dispatch.
@@ -50,7 +64,8 @@ _Avoid_: delivery method, strategy
 
 **Waybill**:
 The task instructions handed to an engine: goal, acceptance criteria, constraints,
-areas to look at, and what "verified" means. Written by the yardmaster.
+areas to look at, and what "verified" means. Written by the yardmaster. Its first
+line is the task's **title**, not prose — see AGENTS.md § Waybill.
 _Avoid_: brief, prompt, ticket, spec
 
 **Report**:
@@ -76,6 +91,18 @@ default. Resolved from `--base`, then the project's `data/projects.md` line, the
 never touches the release branch; releases are cut outside it.
 _Avoid_: default branch, target branch, trunk, main
 
+**Fixtures**:
+The machine-local files a project's siding starts from — a database dump, say —
+kept per project under `fixtures/<project>/` and gitignored. Read by the
+project's own start script, never by railyard.
+_Avoid_: seeds, test data, dumps
+
+**Start script**:
+A project's own `.railyard/worktree-start.sh`, run in a freshly cut siding
+before its engine launches, so the engine opens onto a working environment. Its
+contract is in `docs/guide.md`.
+_Avoid_: bootstrap, provisioning, setup hook
+
 **Yard**:
 The whole railyard installation, and the terminals it runs in — a tmux session named `railyard` by default, or Orca terminals / cmux workspaces / herdr tabs when `data/yard.md` or `RY_BACKEND` says so.
 
@@ -87,7 +114,20 @@ _Avoid_: spawn, launch, kick off, assign
 
 **Review**:
 The yardmaster's judgement of a finished engine's work against its waybill, before
-anything is delivered.
+anything is delivered. Correctness has already been inspected in the siding; what
+review adds is waybill fit, which only the yardmaster can judge.
+
+**Inspection**:
+The block an engine's handoff carries on a haul, recording the inspector's
+verdict, the suite result, the must-fix findings, the revert check and the risk.
+`bin/ry-verdict.sh <id>` prints it and fails when it is missing or malformed.
+_Avoid_: verdict block, review block, QA report
+
+**Revert check**:
+One assertion, named by file and line, that fails when the change is reverted —
+run on a reverted copy and watched to fail. The one claim in a handoff that is
+checkable from outside the siding.
+_Avoid_: mutation test, sanity check
 
 **Couple**:
 To cut a task's siding and start its engine. Separate from dispatch because a

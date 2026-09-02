@@ -27,7 +27,7 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   git -C "$PDIR" fetch -q; git -C "$PDIR" rev-parse --verify -q "origin/ry/$ID" >/dev/null
   grep -q -- "--source-branch ry/$ID" "$RY_FAKE_FORGE_LOG"
   grep -q -- "--target-branch main" "$RY_FAKE_FORGE_LOG"
-  grep -q -- "--title add dark mode css" "$RY_FAKE_FORGE_LOG"
+  grep -q -- "--title add dark mode --description" "$RY_FAKE_FORGE_LOG"
   grep -q '^pr_url=https://gitlab.example.com/grp/sub/r/-/merge_requests/12$' "$RY_HOME/state/$ID.meta"
   grep -q '^forge=gitlab$' "$RY_HOME/state/$ID.meta"
   [ "$(cat "$RY_HOME/state/$ID.status")" = "pr-open" ]
@@ -55,28 +55,31 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   RY_FORGE=gitlab ry-pr.sh "$ID" >/dev/null
   echo '{"state":"opened","head_pipeline":{"status":"running"}}' > "$RY_FAKE_GLAB_VIEW"
   run ry-pr-poll.sh "$ID"
-  [ "$status" -eq 0 ]; [ "$output" = "state=open checks=pending" ]
+  [ "$status" -eq 0 ]; [ "$output" = "state=open checks=pending merge=unknown findings=-" ]
   grep -q -- "mr view 12" "$RY_FAKE_FORGE_LOG"
   echo '{"state":"merged","head_pipeline":{"status":"success"}}' > "$RY_FAKE_GLAB_VIEW"
   run ry-pr-poll.sh "$ID"
-  [ "$output" = "state=merged checks=success" ]
+  [ "$output" = "state=merged checks=success merge=unknown findings=-" ]
   [ "$(cat "$RY_HOME/state/$ID.status")" = "merged" ]
   grep -q " $ID pr-merged https://gitlab.example.com/grp/sub/r/-/merge_requests/12$" "$RY_HOME/state/events.log"
 }
 
-@test "pr-poll github: failed checks raise one event; success is quiet" {
+@test "pr-poll github: failed checks raise one event, and aggregate the rollup" {
   RY_FORGE=github ry-pr.sh "$ID" >/dev/null
-  echo '{"state":"OPEN","statusCheckRollup":[{"status":"COMPLETED","conclusion":"FAILURE"},{"status":"COMPLETED","conclusion":"SUCCESS"}]}' > "$RY_FAKE_GH_VIEW"
+  echo '{"state":"OPEN","mergeStateStatus":"CLEAN","statusCheckRollup":[{"status":"COMPLETED","conclusion":"FAILURE"},{"status":"COMPLETED","conclusion":"SUCCESS"}]}' > "$RY_FAKE_GH_VIEW"
   run ry-pr-poll.sh "$ID"
-  [ "$output" = "state=open checks=failure" ]
+  [ "$output" = "state=open checks=failure merge=clean findings=-" ]
   run ry-pr-poll.sh "$ID"
   [ "$(grep -c "pr-checks-failed" "$RY_HOME/state/events.log")" -eq 1 ]
-  echo '{"state":"OPEN","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"}]}' > "$RY_FAKE_GH_VIEW"
+  echo '{"state":"OPEN","mergeStateStatus":"CLEAN","statusCheckRollup":[{"status":"COMPLETED","conclusion":"SUCCESS"},{"status":"COMPLETED","conclusion":"NEUTRAL"}]}' > "$RY_FAKE_GH_VIEW"
   run ry-pr-poll.sh "$ID"
-  [ "$output" = "state=open checks=success" ]
-  echo '{"state":"OPEN","statusCheckRollup":[]}' > "$RY_FAKE_GH_VIEW"
+  [ "$output" = "state=open checks=success merge=clean findings=0" ]
+  echo '{"state":"OPEN","mergeStateStatus":"CLEAN","statusCheckRollup":[{"status":"IN_PROGRESS"}]}' > "$RY_FAKE_GH_VIEW"
   run ry-pr-poll.sh "$ID"
-  [ "$output" = "state=open checks=none" ]
+  [ "$output" = "state=open checks=pending merge=clean findings=-" ]
+  echo '{"state":"OPEN","mergeStateStatus":"CLEAN","statusCheckRollup":[]}' > "$RY_FAKE_GH_VIEW"
+  run ry-pr-poll.sh "$ID"
+  [ "$output" = "state=open checks=none merge=clean findings=0" ]
 }
 
 @test "watch polls open PRs and turns pr-merged into an inbox line with the url" {
@@ -108,6 +111,39 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   [ "$(grep -c "mr view" "$RY_FAKE_FORGE_LOG")" -eq 2 ]
 }
 
+@test "pr without --auto-merge writes no auto_merge= line and never calls merge" {
+  RY_FORGE=gitlab run ry-pr.sh "$ID"
+  [ "$status" -eq 0 ]
+  ! grep -q '^auto_merge=' "$RY_HOME/state/$ID.meta"
+  ! grep -q "mr merge" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "pr --auto-merge writes auto_merge=merge and never calls merge itself" {
+  RY_FORGE=gitlab run ry-pr.sh --auto-merge "$ID"
+  [ "$status" -eq 0 ]
+  grep -q '^auto_merge=merge$' "$RY_HOME/state/$ID.meta"
+  [ "$(cat "$RY_HOME/state/$ID.status")" = "pr-open" ]
+  ! grep -q "mr merge" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "pr --auto-merge-method squash writes auto_merge=squash" {
+  RY_FORGE=github run ry-pr.sh --auto-merge --auto-merge-method squash "$ID"
+  [ "$status" -eq 0 ]
+  grep -q '^auto_merge=squash$' "$RY_HOME/state/$ID.meta"
+  ! grep -q "pr merge" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "pr --auto-merge-method without --auto-merge is an error" {
+  RY_FORGE=gitlab run ry-pr.sh --auto-merge-method squash "$ID"
+  [ "$status" -ne 0 ]
+}
+
+@test "pr --auto-merge-method as the trailing argument with no value is an error, not a crash" {
+  RY_FORGE=gitlab run ry-pr.sh --auto-merge --auto-merge-method
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"needs a value"* ]]
+}
+
 @test "watch turns failing checks into one inbox line with the url" {
   RY_FORGE=gitlab ry-pr.sh "$ID" >/dev/null
   echo '{"state":"opened","head_pipeline":{"status":"failed"}}' > "$RY_FAKE_GLAB_VIEW"
@@ -115,4 +151,84 @@ lib() { bash -c ". '$BATS_TEST_DIRNAME/../bin/ry-forge-lib.sh'; $*"; }
   grep -q "engine $ID pr-checks-failed: https://gitlab.example.com/grp/sub/r/-/merge_requests/12" "$RY_HOME/state/inbox.md"
   RY_PR_POLL_SEC=0 ry-watch.sh --once
   [ "$(grep -c "pr-checks-failed" "$RY_HOME/state/inbox.md")" -eq 1 ]
+}
+
+# --- the title comes from the waybill, never from a guess -------------------
+
+@test "pr title is the waybill's first line verbatim, on a multi-commit task" {
+  # A conforming waybill: title on line 1, blank line 2, body from line 3.
+  printf '%s\n\n%s\n' "Add a dark mode toggle to the settings page" \
+    "Body prose the title must not be built from." > "$RY_HOME/state/$ID.waybill.md"
+  echo y > "$SIDING/dark2.css"; git -C "$SIDING" add -A
+  git -C "$SIDING" commit -qm "fix: inspector round, tighten the toggle guard"
+  [ "$(git -C "$SIDING" rev-list --count "origin/main..HEAD" --)" -gt 1 ]
+  RY_FORGE=gitlab run ry-pr.sh "$ID"
+  [ "$status" -eq 0 ]
+  grep -q -- "--title Add a dark mode toggle to the settings page --description" "$RY_FAKE_FORGE_LOG"
+  # and not the newest commit subject, which describes an inspector fix
+  ! grep -q -- "--title fix: inspector" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "pr on a single-commit task also uses the waybill title, not the commit subject" {
+  # Deliberate: the title no longer depends on how many commits an engine made.
+  printf '%s\n' "Ship the dark mode toggle" > "$RY_HOME/state/$ID.waybill.md"
+  [ "$(git -C "$SIDING" rev-list --count "origin/main..HEAD" --)" -eq 1 ]
+  RY_FORGE=github run ry-pr.sh "$ID"
+  [ "$status" -eq 0 ]
+  grep -q -- "--title Ship the dark mode toggle --body" "$RY_FAKE_FORGE_LOG"
+  ! grep -q -- "--title add dark mode css" "$RY_FAKE_FORGE_LOG"
+}
+
+@test "an over-long first line is clamped and the PR still opens, on both forges" {
+  # A waybill written before the title contract: 300 characters of prose.
+  long=$(printf 'x%.0s' $(seq 1 300))
+  [ "${#long}" -eq 300 ]
+  printf '%s\n' "$long" > "$RY_HOME/state/$ID.waybill.md"
+  RY_FORGE=gitlab run ry-pr.sh "$ID"
+  [ "$status" -eq 0 ]
+  # The forge call was made -- a length check alone can pass while no PR opens.
+  grep -q -- "glab mr create" "$RY_FAKE_FORGE_LOG"
+  grep -q '^pr_url=https://gitlab.example.com/grp/sub/r/-/merge_requests/12$' "$RY_HOME/state/$ID.meta"
+  [ "$(cat "$RY_HOME/state/$ID.status")" = "pr-open" ]
+  t=$(sed -n 's/.*--title \(.*\) --description.*/\1/p' "$RY_FAKE_FORGE_LOG")
+  [ -n "$t" ]
+  [ "${#t}" -le 255 ]
+  [ "${#t}" -gt 200 ]           # clamped, not emptied
+  [[ "$t" == *"..." ]]          # and marked as cut, not silently truncated
+  # Same on GitHub, whose limit is 256: no ry-pr.sh path emits more than 255.
+  G=$(ry-dispatch.sh --haul --mode pr xyz "second task" | sed -n 's/^id=//p')
+  GS="$RY_HOME/yard/xyz/$G"
+  git -C "$GS" config user.email e@e; git -C "$GS" config user.name e
+  echo z > "$GS/z.css"; git -C "$GS" add -A; git -C "$GS" commit -qm "z"
+  printf '%s\n' "$long" > "$RY_HOME/state/$G.waybill.md"
+  : > "$RY_FAKE_FORGE_LOG"
+  RY_FORGE=github run ry-pr.sh "$G"
+  [ "$status" -eq 0 ]
+  grep -q -- "gh pr create" "$RY_FAKE_FORGE_LOG"
+  t=$(sed -n 's/.*--title \(.*\) --body.*/\1/p' "$RY_FAKE_FORGE_LOG")
+  [ -n "$t" ]
+  [ "${#t}" -le 255 ]
+  [ "${#t}" -gt 200 ]
+  [[ "$t" == *"..." ]]
+}
+
+@test "--title still wins over the waybill, and is itself clamped" {
+  printf '%s\n' "Add a dark mode toggle" > "$RY_HOME/state/$ID.waybill.md"
+  RY_FORGE=gitlab run ry-pr.sh --title "Hand-written title" "$ID"
+  [ "$status" -eq 0 ]
+  grep -q -- "--title Hand-written title --description" "$RY_FAKE_FORGE_LOG"
+  ! grep -q -- "--title Add a dark mode toggle" "$RY_FAKE_FORGE_LOG"
+
+  G=$(ry-dispatch.sh --haul --mode pr xyz "third task" | sed -n 's/^id=//p')
+  GS="$RY_HOME/yard/xyz/$G"
+  git -C "$GS" config user.email e@e; git -C "$GS" config user.name e
+  echo z > "$GS/z.css"; git -C "$GS" add -A; git -C "$GS" commit -qm "z"
+  : > "$RY_FAKE_FORGE_LOG"
+  RY_FORGE=gitlab run ry-pr.sh --title "$(printf 'y%.0s' $(seq 1 300))" "$G"
+  [ "$status" -eq 0 ]
+  t=$(sed -n 's/.*--title \(.*\) --description.*/\1/p' "$RY_FAKE_FORGE_LOG")
+  [ -n "$t" ]
+  [ "${#t}" -le 255 ]
+  [ "${#t}" -gt 200 ]
+  [[ "$t" == *"..." ]]
 }
