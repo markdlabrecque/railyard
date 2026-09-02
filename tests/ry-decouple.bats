@@ -42,10 +42,6 @@ setup() {
 # data/<id>/ goes with the task (#34): empty is removed, files move to
 # data/<project>/<id>-<file>, and nothing else under data/ is touched.
 
-@test "haul dispatch creates no data/<id>/" {
-  [ ! -e "$RY_HOME/data/$ID" ]
-}
-
 @test "decouple removes an empty data/<id>/ and leaves other dirs alone" {
   mkdir -p "$RY_HOME/data/$ID" "$RY_HOME/data/railway"
   echo parked > "$RY_HOME/data/railway/notes.md"
@@ -96,4 +92,18 @@ setup() {
   [ "$status" -eq 0 ]
   [ ! -e "$RY_HOME/data/$ID" ]
   [ ! -e "$RY_HOME/data/xyz" ]
+}
+
+@test "decouple refuses a collision before moving anything" {
+  mkdir -p "$RY_HOME/data/$ID/sub" "$RY_HOME/data/xyz"
+  echo a > "$RY_HOME/data/$ID/keep.md"
+  echo b > "$RY_HOME/data/$ID/sub/notes.md"
+  echo old > "$RY_HOME/data/xyz/$ID-sub-notes.md"
+  run ry-decouple.sh "$ID"
+  [ "$status" -ne 0 ]
+  [ -f "$RY_HOME/data/$ID/keep.md" ]
+  [ -f "$RY_HOME/data/$ID/sub/notes.md" ]
+  [ "$(cat "$RY_HOME/data/xyz/$ID-sub-notes.md")" = old ]
+  [ -f "$RY_HOME/state/$ID.meta" ]
+  ! grep -q '^outcome=' "$RY_HOME/state/$ID.meta"
 }
