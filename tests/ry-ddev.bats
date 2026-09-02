@@ -56,8 +56,8 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   [ "$status" -ne 0 ]
   [[ "$output" == *"--prefix"* ]]
   [[ "$output" == *"1234567"* ]]
-  [[ "$output" == *" 6 "* ]]                    # the cap
-  [[ "$output" == *" 7"* ]]                     # the length it got
+  [[ "$output" == *"at most 6 characters"* ]]   # the cap
+  [[ "$output" == *"this one is 7"* ]]          # the length it got
   [ -z "$(ls "$RY_HOME/state")" ]
   [ -z "$(ls "$RY_HOME/yard")" ]
 }
@@ -78,7 +78,7 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   prefix=$(sed -n 's/^prefix=//p' "$RY_HOME/state/$id.meta")
   [ "${#prefix}" -eq 6 ]
   [[ "$prefix" =~ ^[0-9a-f]{6}$ ]]
-  [[ "$id" != *"$prefix"* ]]
+  [ "$prefix" != "${id:0:6}" ]                  # a digest, not the id truncated
   grep -q "^name: $prefix-xyz\$" "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
 }
 
