@@ -33,7 +33,7 @@ The SessionStart hook claimed the yard, started the watcher and printed the summ
 - project: must exist under `projects/`;
 - mode (hauls only): `local-only` (default) or `pr`. Use the project's registered mode from `data/projects.md` when it has one.
 - base branch: resolved automatically (see `data/projects.md`); pass `--base <branch>` only when the dispatcher names one for this task.
-- DDEV prefix (projects with `.ddev/` only): `--prefix <token>` — one word or a ticket number naming the siding's own DDEV project (`<prefix>-<project>`), so two sidings of one project can both run `ddev`. Omit it and the task id is used; nothing else needs doing.
+- DDEV prefix (projects with `.ddev/` only): `--prefix <token>` — one word or a ticket number, at most 6 characters, naming the siding's own DDEV project (`<prefix>-<project>`), so two sidings of one project can both run `ddev`. Omit it and a 6-character digest of the task id is used; nothing else needs doing.
 - order: a task that cannot start until another has landed names it as a **blocker** with `--after <id>`. It waits as `queued`, and the watcher couples it once every blocker is merged.
 Split independent asks into independent engines; chain dependent ones with `--after`.
 

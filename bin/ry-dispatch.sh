@@ -25,9 +25,9 @@
 # --prefix is one word (a ticket number, say) naming this siding's DDEV
 # project: the siding gets name <prefix>-<project> so it never clashes with
 # another siding or your own checkout. It must match [A-Za-z0-9][A-Za-z0-9-]*
-# and defaults to the task id, which is unique to this task. It falls back to
-# that same default, saying so, when <prefix>-<project> will not fit a
-# 63-character hostname label. It means nothing for a project without .ddev/.
+# and be at most 6 characters. It defaults to a 6-character digest of the task
+# id, which is unique to this task. It means nothing for a project without
+# .ddev/.
 # prints: id=<id>, base=<branch> and siding=<path>
 set -euo pipefail
 # shellcheck source=bin/ry-lib.sh
@@ -68,8 +68,12 @@ wb_title=$(ry_first_line "$waybill")
   "the waybill's first line is the task's title and must be at most $RY_TITLE_MAX characters; this one is ${#wb_title}. Put a short imperative summary of the whole task on line 1, leave line 2 blank, and start the body on line 3. Line 1 was: $wb_title"
 # Validate before anything is written: a bad prefix would only surface as a
 # DDEV project that refuses to start, long after dispatch.
-[ "$prefix_set" -eq 0 ] || ry_prefix_valid "$prefix" \
-  || ry_die "bad --prefix '$prefix': one token matching ^[A-Za-z0-9][A-Za-z0-9-]*$ (a ticket number or one short word)"
+if [ "$prefix_set" -eq 1 ]; then
+  [ ${#prefix} -le $RY_PREFIX_MAX ] || ry_die \
+    "bad --prefix '$prefix': a DDEV prefix is at most $RY_PREFIX_MAX characters; this one is ${#prefix}. Use a ticket number or one short word."
+  ry_prefix_valid "$prefix" \
+    || ry_die "bad --prefix '$prefix': one token matching ^[A-Za-z0-9][A-Za-z0-9-]*$ (a ticket number or one short word)"
+fi
 ticket=${ticket#\#}
 [ -z "$ticket" ] || [[ $ticket =~ ^[0-9]+$ ]] \
   || ry_die "bad --ticket '$ticket': an issue or pull/merge request number, digits only"
@@ -113,18 +117,10 @@ done
 [ -n "$slug" ] || slug=$waybill
 slug=$(ry_slugify "$slug")
 id=$(ry_new_id "$ticket" "$slug")
-# No prefix given: the id itself, which is unique to this task.
-[ -n "$prefix" ] || prefix=$(ry_ddev_default_prefix "$id" "$project")
-# Too long for a DDEV project name: fall back to that same default rather
-# than truncating, which would map two long prefixes onto one name. Dispatch is
-# the only place this is decided, so the prefix= recorded below is always the
-# one the siding's DDEV project is actually called. Said out loud, because a
-# silent substitution leaves you hunting for a project that was never created.
-if ! ry_ddev_name "$prefix" "$project" >/dev/null; then
-  printf 'note: --prefix %s is too long for a DDEV project name (%s) -- using %s instead\n' \
-    "$prefix" "$(ry_ddev_name_too_long "$prefix" "$project")" "$(ry_ddev_default_prefix "$id" "$project")"
-  prefix=$(ry_ddev_default_prefix "$id" "$project")
-fi
+# No prefix given: a digest of the id, which is unique to this task. Dispatch
+# is the only place this is decided, so the prefix= recorded below is always
+# the one the siding's DDEV project is actually called.
+[ -n "$prefix" ] || prefix=$(ry_ddev_default_prefix "$id")
 siding="$home/yard/$project/$id"
 branch="ry/$id"
 
