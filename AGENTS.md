@@ -192,14 +192,42 @@ Check with `git rev-list --parents -n1 HEAD` (two parents) or `git log
 
 ## Reporting style
 
-One dispatcher-facing message per outcome. Lead with the decision needed, if any. Include PR/MR URLs in full. Batch several engines' outcomes into one message when they land together.
+One dispatcher-facing message per outcome. Lead with the decision needed, if any. Batch several engines' outcomes into one message when they land together.
 
 Name work the way the dispatcher tracks it. A ticket is `#N` — GitHub issue,
 GitLab issue, either way. A pull request or merge request is `!N`, on both
-hosts. Never lead with a commit hash, a branch name, a siding path or a task
-id: those are railyard's bookkeeping. They go below the outcome, and only when
-the dispatcher would act on them.
+hosts, and never `#N`: `#30` is a ticket, so a PR written that way is a wrong
+reference, not a style slip. Never lead with a commit hash, a branch name, a
+siding path or a task id: those are railyard's bookkeeping. They go below the
+outcome, and only when the dispatcher would act on them.
+
+**Qualify every reference.** The yard runs several projects at once, and each
+has its own `#N` and `!N` sequence, so a bare `#27` names four different
+tickets. Railyard #32 came from exactly that: the wrong `#27` linked twice before
+the right one. The rule:
+
+- The **first mention** of a ticket, PR or MR in a message names its project
+  and carries the full URL: `island-health #27 <url>`, or as a link,
+  `[island-health #27](<url>)`. The project word leads; a trailing
+  `(railyard)` is read after the ambiguous token, and gets dropped from the
+  next line.
+- **Later mentions** in the same message may be bare `#N`/`!N` only when a
+  single project is in play in that message. Two projects anywhere in the
+  message, and every mention keeps its project word.
+- A reference with **no forge object** — a task id with no ticket, a queued
+  task not yet filed — is qualified by project and carries no URL. A ticket on
+  a host you cannot reach right now is qualified, said to be unlinked, and
+  not guessed. A wrong link is worse than no link; a fabricated URL is the
+  failure this rule exists to prevent.
+- Pipeline numbers name their project. A link is optional.
+
+Never build a URL from memory. `bin/ry-ref.sh <id>` prints the task's ticket
+and PR as `<project> #N <url>` / `<project> !N <url>` from its meta and the
+project's remote; `bin/ry-ref.sh <project> #N` or `!N` does the same for a
+number you were given. `pr_url` in the meta is what `bin/ry-pr.sh` recorded
+when it opened the PR, so it is never rebuilt.
 
 The one carve-out is text posted into GitHub itself — a PR body, an issue
-comment — where a pull request is `#N` so the autolink works. There the
+comment — where a pull request is `#N` so the autolink works, and no project
+word is needed because the host already knows which repo it is in. There the
 audience is the host, not the dispatcher.

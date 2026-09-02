@@ -447,9 +447,11 @@ the second gets `-2`. The yardmaster picks the slug; you can name it yourself in
 the ask, and ids made before this scheme keep working.
 
 In what the yardmaster says back to you, a ticket is `#N` and a pull or merge
-request is `!N` — the same on GitHub and GitLab, so the two never blur. Task
-ids, branch names and commit hashes are mechanics: they come after the outcome,
-if at all.
+request is `!N` — the same on GitHub and GitLab, so the two never blur. Each
+one names its project and, the first time it comes up in a message, carries
+its full URL: several projects share the yard and each has its own `#27`.
+Task ids, branch names and commit hashes are mechanics: they come after the
+outcome, if at all.
 
 **Wait.** The turn ends. You get on with your day. When the engine finishes,
 the watcher wakes the yardmaster with the engine's own one-line handoff.

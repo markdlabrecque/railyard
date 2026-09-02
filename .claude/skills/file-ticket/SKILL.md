@@ -93,5 +93,5 @@ command -v glab >/dev/null || { echo "glab is not on PATH"; exit 1; }
 glab issue create -y --no-editor -R <owner/repo> -t "<title>" -d "$(cat <body-file>)" -l <labels>
 ```
 
-Report the ticket to the dispatcher as `#N` with the full URL, plus the one
+Report the ticket to the dispatcher as `<project> #N` with the full URL, plus the one
 line the subagent could not confirm.
