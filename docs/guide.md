@@ -608,7 +608,7 @@ instructions into the engine's window; it keeps its context and carries on.
 | `bin/ry-yard.sh` | open or attach to the yard |
 | `bin/ry-view.sh [--dry-run] <herdr\|orca\|cmux>` | open a viewer onto a tmux-hosted yard |
 | `bin/ry-dispatch.sh --haul\|--survey [--mode <m>] [--base <b>] [--after <id>] [--ticket <n>] [--slug <text>] <project> "<waybill>"` | dispatch or queue a task |
-| `bin/ry-manifest.sh` | every task not yet decoupled |
+| `bin/ry-manifest.sh` | every task not yet decoupled, as a report the dispatcher can read as-is |
 | `bin/ry-inbox.sh [--ack]` | unread engine events |
 | `bin/ry-deps.sh <id>` | is a queued task ready, pending, or stranded |
 | `bin/ry-couple.sh <id>` | cut a queued task's siding by hand |

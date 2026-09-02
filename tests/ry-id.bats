@@ -150,9 +150,10 @@ dispatch_id() { ry-dispatch.sh "$@" | sed -n 's/^id=//p'; }
   n=$(dispatch_id --haul --slug "news filter styling" xyz "wb")
   run ry-manifest.sh
   [ "$status" -eq 0 ]
-  [[ "$output" == *"#16  $t"* ]]
-  [[ "$output" == *"  $n  xyz"* ]]
-  [[ "$output" != *"#  $n"* ]]
+  [[ "$output" == *"- #16 xyz haul, local-only, "* ]]
+  [[ "$output" == *": $t"* ]]
+  [[ "$output" == *"- xyz haul, local-only, "* ]]
+  [[ "$output" != *"# $n"* ]]
 }
 
 # --- the naming rule ---------------------------------------------------------
