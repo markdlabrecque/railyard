@@ -23,6 +23,30 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$id" ] || ry_die "need <id>"
 
+ry_collapse_data() {  # <home> <project> <id>: fold data/<id>/ into data/<project>/
+  local home=$1 project=$2 id=$3 src dest f rel
+  src="$home/data/$id"; dest="$home/data/$project"
+  [ -d "$src" ] || return 0
+  # Same name, same directory: it already is the project folder. Leave it.
+  [ "$src" != "$dest" ] || return 0
+  # .DS_Store is Finder noise, not work product: it is the one file dropped.
+  find "$src" -name .DS_Store -type f -delete
+  # Two passes: refuse before anything moves, so a collision leaves data/<id>/
+  # whole and the decouple untouched, rather than half-emptied.
+  while IFS= read -r -d '' f; do
+    rel=${f#"$src"/}; rel=${rel//\//-}
+    [ ! -e "$dest/$id-$rel" ] || ry_die "data/$project/$id-$rel already exists; data/$id/ left in place"
+  done < <(find "$src" -type f -print0)
+  while IFS= read -r -d '' f; do
+    [ -d "$dest" ] || mkdir -p "$dest"
+    rel=${f#"$src"/}; rel=${rel//\//-}
+    mv -n "$f" "$dest/$id-$rel"
+  done < <(find "$src" -type f -print0)
+  # Empty subdirectories first, deepest first; then the directory itself.
+  find "$src" -depth -mindepth 1 -type d -exec rmdir {} \; 2>/dev/null || true
+  rmdir "$src" 2>/dev/null || printf 'note: data/%s/ not empty after collapse, left in place\n' "$id" >&2
+}
+
 home=$(ry_home)
 project=$(ry_meta_get "$id" project)
 siding=$(ry_meta_get "$id" siding)
@@ -44,6 +68,16 @@ git -C "$pdir" worktree prune
 if [ "$delete_branch" -eq 1 ]; then
   git -C "$pdir" branch -q -D "$branch" 2>/dev/null || true
 fi
+
+# data/<id>/ goes with the task (#34). Its files are work product -- a survey
+# report, a PR body -- so they are moved, never deleted, into the project's
+# durable folder as data/<project>/<id>-<file>: flat and browsable by project,
+# and the id prefix is what keeps two surveys' report.md apart. Every move is
+# a rename, so a decouple that dies midway has lost nothing. The directory
+# itself is only ever rmdir'd, never rm -rf'd: if something unexpected is left
+# behind it stays, and the decouple says so. Runs before the outcome line and
+# the archive loop, using the $project captured above, not a re-read.
+ry_collapse_data "$home" "$project" "$id"
 
 # Preserve the outcome before it is overwritten: whether this task merged is
 # what anything queued behind it needs to know.

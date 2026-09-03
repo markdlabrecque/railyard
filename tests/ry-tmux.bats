@@ -64,6 +64,13 @@ wait_for_log() { for _ in $(seq 1 50); do [ -s "$RY_FAKE_CLAUDE_LOG" ] && return
   [ -d "$RY_HOME/data/$id" ]
 }
 
+@test "a haul launch creates no data/<id>/ (#34)" {
+  id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
+  for _ in $(seq 1 50); do [ -s "$RY_FAKE_CLAUDE_LOG" ] && break; sleep 0.1; done
+  [ -s "$RY_FAKE_CLAUDE_LOG" ]
+  [ ! -e "$RY_HOME/data/$id" ]
+}
+
 @test "tmux peek captures the engine pane and send types into it" {
   id=$(ry-dispatch.sh --haul xyz "x" | sed -n 's/^id=//p')
   echo turn-ended > "$RY_HOME/state/$id.status"
