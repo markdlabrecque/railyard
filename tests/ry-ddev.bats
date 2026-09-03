@@ -33,18 +33,73 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
 @test "ry_prefix_valid accepts a ticket number and a single word" {
   lib
   run ry_prefix_valid 308;      [ "$status" -eq 0 ]
-  run ry_prefix_valid ddev-fix; [ "$status" -eq 0 ]
+  run ry_prefix_valid ddev;     [ "$status" -eq 0 ]
   run ry_prefix_valid A1;       [ "$status" -eq 0 ]
   run ry_prefix_valid "a b";    [ "$status" -ne 0 ]
   run ry_prefix_valid "-a";     [ "$status" -ne 0 ]
   run ry_prefix_valid "a.b";    [ "$status" -ne 0 ]
 }
 
-# The id is unique to the task; the id's last field is the last word of its
-# description, which two tasks can easily share.
-@test "without --prefix the task id itself is used" {
+# Every prefix a dispatcher has typed by hand was 3-5 characters; the cap is
+# there to stop the default from being the one that runs long (#36).
+@test "ry_prefix_valid caps a prefix at 6 characters" {
+  lib
+  run ry_prefix_valid 123456;   [ "$status" -eq 0 ]
+  run ry_prefix_valid ns-297;   [ "$status" -eq 0 ]
+  run ry_prefix_valid 1234567;  [ "$status" -ne 0 ]
+  run ry_prefix_valid ddev-fix; [ "$status" -ne 0 ]
+}
+
+@test "an over-long --prefix is refused at dispatch, naming the cap and the length" {
+  make_ddev_project xyz
+  run ry-dispatch.sh --haul --prefix 1234567 xyz "x"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--prefix"* ]]
+  [[ "$output" == *"1234567"* ]]
+  [[ "$output" == *"at most 6 characters"* ]]   # the cap
+  [[ "$output" == *"this one is 7"* ]]          # the length it got
+  [ -z "$(ls "$RY_HOME/state")" ]
+  [ -z "$(ls "$RY_HOME/yard")" ]
+}
+
+@test "a 6-character --prefix is accepted and recorded" {
+  make_ddev_project xyz
+  id=$(ry-dispatch.sh --haul --prefix 123456 xyz "x" | sed -n 's/^id=//p')
+  grep -q '^prefix=123456$' "$RY_HOME/state/$id.meta"
+  grep -q '^name: 123456-xyz$' "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
+}
+
+# The default is a digest of the id, not the id: the id ran to 21 characters
+# in `ddev list` (#36). Not a substring of the id either, or it would be a
+# truncation, and two tasks on one ticket truncate to the same thing.
+@test "without --prefix a 6-character digest of the id is used" {
+  make_ddev_project xyz
   id=$(ry-dispatch.sh --haul --slug "news filter styling" xyz "x" | sed -n 's/^id=//p')
-  grep -q "^prefix=$id\$" "$RY_HOME/state/$id.meta"
+  prefix=$(sed -n 's/^prefix=//p' "$RY_HOME/state/$id.meta")
+  [ "${#prefix}" -eq 6 ]
+  [[ "$prefix" =~ ^[0-9a-f]{6}$ ]]
+  [ "$prefix" != "${id:0:6}" ]                  # a digest, not the id truncated
+  grep -q "^name: $prefix-xyz\$" "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
+}
+
+@test "two ids sharing their first 6 characters get different default prefixes" {
+  lib
+  a=$(ry_ddev_default_prefix 297-news-filter-no-scroll-jump)
+  b=$(ry_ddev_default_prefix 297-news-listing-spacing-revision)
+  [ "${#a}" -eq 6 ] && [ "${#b}" -eq 6 ]
+  [ "$a" != "$b" ]
+}
+
+@test "the default prefix is deterministic: the same id always gives the same 6 characters" {
+  lib
+  a=$(ry_ddev_default_prefix latest-commit-on-main)
+  b=$(ry_ddev_default_prefix latest-commit-on-main)
+  [ "$a" = "$b" ]
+  [ "${#a}" -eq 6 ]
+  # and dispatch records exactly what the library computes from the id alone
+  make_ddev_project xyz
+  id=$(ry-dispatch.sh --haul --slug "latest commit on main" xyz "x" | sed -n 's/^id=//p')
+  grep -q "^prefix=$(ry_ddev_default_prefix "$id")\$" "$RY_HOME/state/$id.meta"
 }
 
 # --- the name ----------------------------------------------------------------
@@ -56,50 +111,22 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   [ "$output" = "3a8d-island-health" ]
 }
 
-# Truncating to 63 would map two prefixes that differ only past the limit onto
-# one DDEV project name -- the exact collision this change exists to prevent.
-@test "ry_ddev_name refuses a name over 63 characters rather than truncating" {
+# The prefix is capped at dispatch; the project name has no limit, by decision
+# (#36). So the name has no length branch left, and there is no "too long"
+# fallback for dispatch to take: an over-long prefix never gets this far.
+@test "ry_ddev_name has no length limit: an 80-character project name is joined as is" {
   lib
-  run ry_ddev_name "$(printf 'p%.0s' $(seq 1 61))" x   # 61 + 1 + 1 = 63
+  long_project=$(printf 'p%.0s' $(seq 1 80))
+  run ry_ddev_name 3a8d "$long_project"
   [ "$status" -eq 0 ]
-  [ "${#output}" -eq 63 ]
-  run ry_ddev_name "$(printf 'p%.0s' $(seq 1 62))" x   # one over
+  [ "$output" = "3a8d-$long_project" ]
+}
+
+@test "an over-long --prefix is refused, not silently replaced, for a project with no .ddev/ too" {
+  run ry-dispatch.sh --haul --prefix 1234567 xyz "x"
   [ "$status" -ne 0 ]
-  [ -z "$output" ]
-}
-
-# Truncating would collide; aborting would make the dispatcher re-run for a
-# flag that is only ever a convenience. So: fall back, out loud.
-@test "an over-long --prefix falls back to the id and says so" {
-  make_ddev_project xyz
-  long=$(printf 'p%.0s' $(seq 1 80))
-  run ry-dispatch.sh --haul --prefix "$long" xyz "x"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"too long"* ]]
-  [[ "$output" == *"63"* ]]
-  id=$(sed -n 's/^id=//p' <<<"$output")
-  [[ "$output" == *"$id"* ]]                    # it names the value it used
-  # and the meta agrees with the DDEV project that actually exists
-  grep -q "^prefix=$id\$" "$RY_HOME/state/$id.meta"
-  grep -q "^name: $id-xyz\$" "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
-}
-
-@test "the fallback applies to a project with no .ddev/ too, and still dispatches" {
-  long=$(printf 'p%.0s' $(seq 1 80))
-  run ry-dispatch.sh --haul --prefix "$long" xyz "x"
-  [ "$status" -eq 0 ]
-  id=$(sed -n 's/^id=//p' <<<"$output")
-  grep -q "^prefix=$id\$" "$RY_HOME/state/$id.meta"
-  [ -d "$RY_HOME/yard/xyz/$id" ]
-}
-
-# The longest prefix that still fits must be accepted: the guard is a limit,
-# not a excuse to refuse legitimate names.
-@test "the longest prefix that fits is accepted end to end" {
-  make_ddev_project xyz
-  fits=$(printf 'p%.0s' $(seq 1 59))   # 59 + 1 + len("xyz") = 63
-  id=$(ry-dispatch.sh --haul --prefix "$fits" xyz "x" | sed -n 's/^id=//p')
-  grep -q "^name: $fits-xyz\$" "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
+  [[ "$output" != *"too long for a DDEV project name"* ]]
+  [ -z "$(ls "$RY_HOME/state")" ]
 }
 
 # --- couple ------------------------------------------------------------------
@@ -114,10 +141,17 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   [ -z "$(git -C "$RY_HOME/yard/xyz/$id" status --porcelain)" ]
 }
 
-@test "couple falls back to the id when no prefix was given" {
+# A meta with no prefix line was written before railyard recorded one; couple
+# recomputes the default from the id alone, so it must land on the same digest.
+@test "couple rebuilds the default prefix from the id when the meta has none" {
+  lib
   make_ddev_project xyz
-  id=$(ry-dispatch.sh --haul --slug "news filter styling" xyz "x" | sed -n 's/^id=//p')
-  grep -q "^name: $id-xyz\$" "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
+  a=$(ry-dispatch.sh --haul xyz "a" | sed -n 's/^id=//p')
+  b=$(ry-dispatch.sh --haul --after "$a" --slug "news filter styling" xyz "b" | sed -n 's/^id=//p')
+  sed -i.bak '/^prefix=/d' "$RY_HOME/state/$b.meta"     # meta from before --prefix
+  run ry-couple.sh "$b"
+  [ "$status" -eq 0 ]
+  grep -q "^name: $(ry_ddev_default_prefix "$b")-xyz\$" "$RY_HOME/yard/xyz/$b/.ddev/config.local.yaml"
 }
 
 @test "a project without .ddev/ is untouched" {
@@ -251,38 +285,48 @@ lib() { . "$BATS_TEST_DIRNAME/../bin/ry-lib.sh"; }
   [ ! -e "$RY_HOME/yard/xyz/$id" ]
 }
 
-# --- long slugs --------------------------------------------------------------
-# A slug is far longer than the two random bytes ids used to end in, so
-# `<id>-<project>` overflowing a 63-character hostname label stopped being an
-# edge case. The fallback has to stay unique: two tasks on one ticket differ
-# only in their trailing counter, so truncating would map them onto one DDEV
-# project -- the collision the whole override exists to prevent.
-@test "a long slug still yields a working DDEV project name inside 63 characters" {
-  long_project=$(printf 'p%.0s' $(seq 1 40))
-  make_project "$long_project"
-  make_ddev_project "$long_project"
-  wb="fixtures start script for the whole yard"
-  a=$(ry-dispatch.sh --haul --ticket 3 --slug "$wb" "$long_project" "x" | sed -n 's/^id=//p')
-  b=$(ry-dispatch.sh --haul --ticket 3 --slug "$wb" "$long_project" "x" | sed -n 's/^id=//p')
-  [ "$a" != "$b" ]
-  [ $(( ${#a} + 1 + ${#long_project} )) -gt 63 ]   # the id itself will not fit
-  na=$(sed -n 's/^name: //p' "$RY_HOME/yard/$long_project/$a/.ddev/config.local.yaml")
-  nb=$(sed -n 's/^name: //p' "$RY_HOME/yard/$long_project/$b/.ddev/config.local.yaml")
-  [ -n "$na" ] && [ "$na" != "$nb" ]
-  for n in "$na" "$nb"; do
-    [ "${#n}" -le 63 ]
-    [[ "$n" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]]
-  done
-  # and the meta names the project that was actually written
-  grep -q "^prefix=${na%-$long_project}\$" "$RY_HOME/state/$a.meta"
+# --- old sidings --------------------------------------------------------------
+# A siding cut before the 6-character cap has a long prefix in its meta and an
+# override file naming <that prefix>-<project>. The cap lives at dispatch only:
+# decouple must still resolve and delete that DDEV project, from the override
+# first and from the meta when the override is gone.
+@test "decouple still deletes the DDEV project of a siding with a pre-cap 21-character prefix" {
+  make_ddev_project xyz
+  id=$(ry-dispatch.sh --haul --slug "latest commit on main" xyz "x" | sed -n 's/^id=//p')
+  old=latest-commit-on-main                              # 21 characters, as recorded before #36
+  sed -i.bak "s/^prefix=.*/prefix=$old/" "$RY_HOME/state/$id.meta"
+  printf 'name: %s-xyz\n' "$old" > "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
+  run ry-decouple.sh "$id"
+  [ "$status" -eq 0 ]
+  grep -q -- " $old-xyz\$" "$RY_FAKE_DDEV_LOG"
+  [ ! -e "$RY_HOME/yard/xyz/$id" ]
 }
 
-@test "the long-slug fallback is stable: couple rebuilds it from the id alone" {
-  lib
-  long_project=$(printf 'p%.0s' $(seq 1 40))
-  a=$(ry_ddev_default_prefix 3-fixtures-start-script-for-the-whole "$long_project")
-  b=$(ry_ddev_default_prefix 3-fixtures-start-script-for-the-whole "$long_project")
-  [ "$a" = "$b" ]
-  [ "$a" != 3-fixtures-start-script-for-the-whole ]
-  [ "$a" != "$(ry_ddev_default_prefix 3-fixtures-start-script-for-the-whole-2 "$long_project")" ]
+@test "with no override, a pre-cap long prefix in the meta still names the DDEV project to delete" {
+  make_ddev_project xyz
+  id=$(ry-dispatch.sh --haul --slug "latest commit on main" xyz "x" | sed -n 's/^id=//p')
+  old=latest-commit-on-main
+  sed -i.bak "s/^prefix=.*/prefix=$old/" "$RY_HOME/state/$id.meta"
+  rm -f "$RY_HOME/yard/xyz/$id/.ddev/config.local.yaml"
+  run ry-decouple.sh "$id"
+  [ "$status" -eq 0 ]
+  grep -q -- " $old-xyz\$" "$RY_FAKE_DDEV_LOG"
+  [ ! -e "$RY_HOME/yard/xyz/$id" ]
+}
+
+# --- long project names -------------------------------------------------------
+# The 63-character total check is gone by decision (#36): the project name has
+# no limit, and railyard raises no length complaint about it.
+@test "an 80-character project name dispatches with no length complaint" {
+  long_project=$(printf 'p%.0s' $(seq 1 80))
+  make_project "$long_project"
+  make_ddev_project "$long_project"
+  run ry-dispatch.sh --haul --ticket 3 --slug "fixtures start script" "$long_project" "x"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"too long"* ]]
+  [[ "$output" != *"63"* ]]
+  id=$(sed -n 's/^id=//p' <<<"$output")
+  prefix=$(sed -n 's/^prefix=//p' "$RY_HOME/state/$id.meta")
+  [ "${#prefix}" -eq 6 ]
+  grep -q "^name: $prefix-$long_project\$" "$RY_HOME/yard/$long_project/$id/.ddev/config.local.yaml"
 }
