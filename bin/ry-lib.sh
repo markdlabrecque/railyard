@@ -296,45 +296,31 @@ ry_stop_hook_registered() {  # <siding>: does it register ry-engine-stop.sh as a
 
 RY_DDEV_OVERRIDE=".ddev/config.local.yaml"
 
-ry_prefix_valid() {  # <token>: one hostname-label-safe word
-  [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]]
+RY_PREFIX_MAX=6   # a DDEV prefix is a short handle, not a description (see #36)
+
+ry_prefix_valid() {  # <token>: one hostname-label-safe word of at most RY_PREFIX_MAX chars
+  [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] && [ ${#1} -le $RY_PREFIX_MAX ]
 }
 
-RY_DDEV_NAME_MAX=63   # a DDEV project name has to be a valid hostname label
-
-ry_ddev_name() {  # <prefix> <project> -> the name, or 1 when it does not fit
-  # No truncation: two prefixes differing only past the limit would cut down to
-  # one DDEV project name, which is the collision this whole change exists to
-  # prevent. A prefix that long is a mistake worth naming, so it is refused at
-  # dispatch time (see ry-dispatch.sh) and refused again here.
-  local n="$1-$2"
-  [ ${#n} -le $RY_DDEV_NAME_MAX ] || return 1
-  printf '%s\n' "$n"
+ry_ddev_name() {  # <prefix> <project> -> the DDEV project name
+  # No length check: the prefix is capped at dispatch, and the project name has
+  # no limit by decision (#36). A project name long enough to push this past a
+  # 63-character hostname label is the dispatcher's problem, knowingly.
+  printf '%s-%s\n' "$1" "$2"
 }
 
-ry_ddev_default_prefix() {  # <id> <project> -> the DDEV prefix for a task with no --prefix
-  # The task id itself. It is unique by construction, it is stable for the life
-  # of the task, and it is already a valid hostname label, so it is the only
-  # honest default: two sidings can never end up sharing a DDEV project.
+ry_ddev_default_prefix() {  # <id> -> the DDEV prefix for a task with no --prefix
+  # Six hex characters of the id's blob hash: unique per id, stable for the
+  # life of the task, and recomputable from the id alone, which is what
+  # ry-couple.sh needs for a meta that has no prefix line. Hex is always a
+  # valid hostname-label start.
   #
-  # The old default -- the id's last hyphenated field -- was two random bytes.
-  # Under a slug id that field is the last word of the description, so
-  # `news-filter-styling` and `homepage-styling` would both ask for
-  # `styling-<project>` and fight over one DDEV project.
-  #
-  # When `<id>-<project>` will not fit a 63-character hostname label, fall back
-  # to a short digest of the id: still unique, still stable, and recomputable
-  # from the id alone, which is what ry-couple.sh needs for a meta that has no
-  # prefix line. Truncating the id instead would collide, since two ids on one
-  # ticket share their leading characters.
-  local id=$1 project=$2
-  if ry_ddev_name "$id" "$project" >/dev/null; then printf '%s\n' "$id"; return; fi
-  printf 'ry%s\n' "$(printf '%s' "$id" | git hash-object --stdin | cut -c1-8)"
-}
-
-ry_ddev_name_too_long() {  # <prefix> <project>: message for a name that will not fit
-  printf "'%s-%s' is %d characters; a DDEV project name is a hostname label, so it cannot exceed %d. Use a shorter --prefix (a ticket number, or one short word)." \
-    "$1" "$2" "$((${#1} + 1 + ${#2}))" "$RY_DDEV_NAME_MAX"
+  # Not the id itself: that ran to 21 characters in `ddev list` (#36). Not the
+  # id truncated: two tasks on one ticket share their leading characters, so
+  # `297-news-filter-no-scroll-jump` and `297-news-listing-spacing-revision`
+  # would both become `297-ne` and fight over one DDEV project. The id's last
+  # field was ruled out before that, for the same reason with the other end.
+  printf '%s' "$1" | git hash-object --stdin | cut -c1-$RY_PREFIX_MAX
 }
 
 ry_ddev_write_override() {  # <siding> <project> <prefix>: no-op without .ddev/
@@ -342,8 +328,7 @@ ry_ddev_write_override() {  # <siding> <project> <prefix>: no-op without .ddev/
   [ -d "$siding/.ddev" ] || return 0
   git -C "$siding" check-ignore -q -- "$RY_DDEV_OVERRIDE" || ry_die \
     "project '$project' does not gitignore $RY_DDEV_OVERRIDE. Railyard writes that file into every siding of a DDEV project to give it its own DDEV project name; if the project tracks it, the siding is dirty from the moment it is cut and ry-pr.sh will later refuse to open the PR. Add $RY_DDEV_OVERRIDE to the project's .gitignore, then couple again."
-  name=$(ry_ddev_name "$prefix" "$project") \
-    || ry_die "cannot name this siding's DDEV project: $(ry_ddev_name_too_long "$prefix" "$project")"
+  name=$(ry_ddev_name "$prefix" "$project")
   cat > "$siding/$RY_DDEV_OVERRIDE" <<YAML || ry_die \
     "could not write $siding/$RY_DDEV_OVERRIDE, so this siding has no DDEV project name of its own and would collide with every other siding of '$project'. The siding is being rolled back; check the permissions on $siding/.ddev and couple again."
 # Written by railyard when this siding was coupled. Gitignored, never committed.
@@ -364,7 +349,7 @@ ry_ddev_resolve_name() {  # <siding> [<prefix>] [<project>] -> the DDEV project 
     name=$(sed -n 's/^name: *//p' "$siding/$RY_DDEV_OVERRIDE" | head -n 1) || name=""
   fi
   if [ -z "$name" ] && [ -n "$prefix" ] && [ -n "$project" ]; then
-    name=$(ry_ddev_name "$prefix" "$project") || name=""
+    name=$(ry_ddev_name "$prefix" "$project")
   fi
   if [ -z "$name" ] && [ -f "$siding/.ddev/config.yaml" ]; then
     name=$(sed -n 's/^name: *//p' "$siding/.ddev/config.yaml" | head -n 1) || name=""
