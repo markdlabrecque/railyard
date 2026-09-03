@@ -78,7 +78,17 @@ longest_line() { awk '{ if (length > m) m = length } END { print m+0 }' <<<"$1";
   [ "$status" -eq 0 ]
   # every non-blank line is a header, a row, a sub-bullet, or a sub-bullet's own
   # wrapped continuation (aligned under its text, not a deeper level)
-  ! grep -vE '^$|^[a-z-]+$|^inbox: |^- |^  - |^    [^ -]' <<<"$output"
+  ! grep -vE '^$|^[a-z-]+$|^inbox: |^- |^  [^ -]|^  - |^    [^ -]' <<<"$output"
+}
+
+@test "an empty handoff adds no line to its row" {
+  A=$(ry-dispatch.sh --haul xyz "a" | sed -n 's/^id=//p')
+  B=$(ry-dispatch.sh --haul xyz "b" | sed -n 's/^id=//p')
+  echo turn-ended > "$RY_HOME/state/$A.status"; : > "$RY_HOME/state/$A.last.md"
+  echo turn-ended > "$RY_HOME/state/$B.status"; echo "DONE: b finished" > "$RY_HOME/state/$B.last.md"
+  run ry-manifest.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *": $A"$'\n- xyz haul, local-only, 0m: '"$B"$'\n  - DONE: b finished\n'* ]]
 }
 
 @test "manifest shows pr url and unread inbox count, and is calm when empty" {
@@ -91,6 +101,15 @@ longest_line() { awk '{ if (length > m) m = length } END { print m+0 }' <<<"$1";
   [[ "$output" == $'pr-open\n\n- xyz haul, pr, '* ]]
   [[ "$output" == *$'\n  - https://g/x/-/merge_requests/3\n'* ]]
   [[ "$output" == *"inbox: 2 unread"* ]]
+}
+
+@test "a pr url is never wrapped, even past the width" {
+  A=$(ry-dispatch.sh --haul --mode pr xyz "t" | sed -n 's/^id=//p')
+  url="https://gitlab.example.com/group/subgroup/subsub/project-name/-/merge_requests/1234"
+  [ ${#url} -gt 80 ]
+  echo pr-open > "$RY_HOME/state/$A.status"; printf 'pr_url=%s\n' "$url" >> "$RY_HOME/state/$A.meta"
+  run ry-manifest.sh
+  [[ "$output" == *$'\n  - '"$url"$'\n'* ]]
 }
 
 @test "statuses come out in lifecycle order: queued before running before turn-ended" {

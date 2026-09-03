@@ -85,7 +85,10 @@ for status in queued running turn-ended pr-open merged dispatched; do
     if [ -f "$st/$id.last.md" ]; then
       # The handoff's first line says what happened. Two lines of it is the
       # budget; the front of the sentence is the part that carries the news.
-      line+=$'\n'"$(sub "$(head -n1 "$st/$id.last.md")" 2)"
+      # A handoff with no first line (an engine that ended on a tool call)
+      # adds no line: a blank inside the list reads as a rendering glitch.
+      summary=$(sub "$(head -n1 "$st/$id.last.md")" 2)
+      [ -z "$summary" ] || line+=$'\n'"$summary"
       # Surface the risk line too, so a finished task worth a look stands out
       # without opening its handoff. Scoped to the Inspection block: a
       # `- risk:` line quoted in the handoff's prose is not a verdict.
