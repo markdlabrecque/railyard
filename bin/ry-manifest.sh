@@ -2,7 +2,7 @@
 # The manifest: every task not yet decoupled, grouped by status, with what each
 # queued task waits on, plus the inbox count. Written as a report the dispatcher
 # can read as-is: markdown lists, no line over 80 characters, rows led by the
-# ticket and project rather than the task id.
+# project and its ticket (AGENTS.md § Reporting style) rather than the task id.
 # Read-only. usage: ry-manifest.sh
 set -euo pipefail
 # shellcheck source=bin/ry-lib.sh
@@ -65,12 +65,12 @@ for status in queued running turn-ended pr-open merged dispatched; do
     [ -f "$f" ] || continue
     [ "$(cat "$f")" = "$status" ] || continue
     id=${f##*/}; id=${id%.status}
-    # The ticket leads when the task has one: it is the identifier the
-    # dispatcher tracks work by. The project follows, then shape, mode and
-    # age; the id closes the row because it is what the bin/ scripts take.
+    # The project leads and the ticket follows it, per AGENTS.md § Reporting
+    # style: a bare #N names a different ticket in every project. Then shape,
+    # mode and age; the id closes the row because it is what bin/ scripts take.
     ticket=$(ry_meta_get "$id" ticket); project=$(ry_meta_get "$id" project)
     shape=$(ry_meta_get "$id" shape); mode=$(ry_meta_get "$id" mode)
-    head_="$project $shape"; [ -n "$ticket" ] && head_="#$ticket $head_"
+    head_=$project; [ -n "$ticket" ] && head_+=" #$ticket"; head_+=" $shape"
     [ -n "$mode" ] && [ "$mode" != none ] && head_+=", $mode"
     line=$(row "$head_, $(age_of "$f"): $id")
     url=$(ry_meta_get "$id" pr_url)

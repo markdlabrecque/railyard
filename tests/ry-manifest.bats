@@ -3,7 +3,7 @@ load helpers
 setup() { setup_home; make_project xyz; }
 
 # The manifest is a report, not program output (#37): markdown lists grouped by
-# a lowercase status word, rows led by ticket and project, nothing over 80
+# a lowercase status word, rows led by project then ticket, nothing over 80
 # characters. These tests hold that shape.
 
 longest_line() { awk '{ if (length > m) m = length } END { print m+0 }' <<<"$1"; }
@@ -30,12 +30,12 @@ longest_line() { awk '{ if (length > m) m = length } END { print m+0 }' <<<"$1";
   ! grep -qE '^[A-Z][A-Z-]+$' <<<"$output"
 }
 
-@test "rows lead with the ticket, then the project; the task id never leads" {
+@test "rows lead with the project, then its ticket; the task id never leads" {
   t=$(ry-dispatch.sh --haul --ticket 16 --slug "name work" xyz "wb" | sed -n 's/^id=//p')
   n=$(ry-dispatch.sh --haul --slug "news filter styling" xyz "wb" | sed -n 's/^id=//p')
   run ry-manifest.sh
   [ "$status" -eq 0 ]
-  grep -qE "^- #16 xyz haul, local-only, [0-9]+m: $t\$" <<<"$output"
+  grep -qE "^- xyz #16 haul, local-only, [0-9]+m: $t\$" <<<"$output"
   grep -qE "^- xyz haul, local-only, [0-9]+m: $n\$" <<<"$output"
   ! grep -qE "^- *(#)?($t|$n)" <<<"$output"
   [[ "$output" != *"# $n"* ]]

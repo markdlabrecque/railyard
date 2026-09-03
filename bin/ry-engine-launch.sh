@@ -24,7 +24,10 @@ bindir=$(cd "$(dirname "$0")" && pwd)
 siding=$(ry_meta_get "$id" siding)
 [ -d "$siding" ] || ry_die "siding $siding missing"
 shape=$(ry_meta_get "$id" shape); branch=$(ry_meta_get "$id" branch)
-report="$home/data/$id/report.md"; mkdir -p "$home/data/$id"
+# Only a survey writes a report, so only a survey gets the directory: a haul
+# never writes there, and an empty data/<id>/ per haul is what #34 was about.
+report="$home/data/$id/report.md"
+[ "$shape" = survey ] && mkdir -p "$home/data/$id"
 # Written by ry-couple.sh only when the project's start script failed. The
 # {{setup}} line disappears when there is none, so the usual prompt is unchanged.
 setup="$home/state/$id.setup-failed.md"
