@@ -117,5 +117,5 @@ set_remote() { git -C "$RY_HOME/projects/$1" remote set-url origin "$2"; }
   run bin/ry-ref.sh acr '#abc'
   [ "$status" -ne 0 ]; [[ "$output" == *"not a number"* ]]
   run bin/ry-ref.sh
-  [ "$status" -eq 2 ]; [[ "$output" == *usage:* ]]
+  [ "$status" -eq 2 ]; [[ "$output" == *usage:* ]]  # bats merges stderr into output
 }

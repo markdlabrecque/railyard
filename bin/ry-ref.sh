@@ -13,7 +13,7 @@ set -euo pipefail
 . "$(dirname "$0")/ry-lib.sh"
 # shellcheck source=bin/ry-forge-lib.sh
 . "$(dirname "$0")/ry-forge-lib.sh"
-case ${1:-} in -h|--help|'') ry_usage "$0"; [ -n "${1:-}" ] && exit 0; exit 2 ;; esac
+case ${1:-} in -h|--help) ry_usage "$0"; exit 0 ;; '') ry_usage "$0" >&2; exit 2 ;; esac
 home=$(ry_home)
 
 remote_of() {  # <project> -> origin url, or die
