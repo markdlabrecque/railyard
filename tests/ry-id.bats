@@ -145,14 +145,15 @@ dispatch_id() { ry-dispatch.sh "$@" | sed -n 's/^id=//p'; }
 
 # --- the manifest ------------------------------------------------------------
 
-@test "the manifest leads with the ticket when the task has one" {
+@test "the manifest names the project, then the ticket when the task has one" {
   t=$(dispatch_id --haul --ticket 16 --slug "name work" xyz "wb")
   n=$(dispatch_id --haul --slug "news filter styling" xyz "wb")
   run ry-manifest.sh
   [ "$status" -eq 0 ]
-  [[ "$output" == *"#16  $t"* ]]
-  [[ "$output" == *"  $n  xyz"* ]]
-  [[ "$output" != *"#  $n"* ]]
+  [[ "$output" == *"- xyz #16 haul, local-only, "* ]]
+  [[ "$output" == *": $t"* ]]
+  [[ "$output" == *"- xyz haul, local-only, "* ]]
+  [[ "$output" != *"# $n"* ]]
 }
 
 # --- the naming rule ---------------------------------------------------------
