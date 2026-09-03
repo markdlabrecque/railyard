@@ -21,8 +21,10 @@ age_of() {  # <file> -> e.g. 3m / 2h / 1d
 
 # wrap <first-prefix> <rest-prefix> <max-lines> <text>: word-wrap text so no
 # line exceeds $width. max-lines 0 means unlimited; otherwise the text is cut
-# after that many lines, front kept, with an ellipsis marking the cut. A single
-# word wider than the line is split rather than allowed to overflow.
+# after that many lines, front kept, with "..." marking the cut. ASCII on
+# purpose: BSD awk counts bytes, so a three-byte ellipsis would push a full line
+# to 82. A single word wider than the line is split rather than allowed to
+# overflow.
 wrap() {
   printf '%s\n' "$4" | awk -v w="$width" -v first="$1" -v rest="$2" -v max="$3" '
     function flush() { print pre line; n++; pre = rest; line = "" }
@@ -47,9 +49,9 @@ wrap() {
         flush(); line = wd
       }
       if (cut) {
-        room = w - length(pre) - 1
+        room = w - length(pre) - 3
         if (length(line) > room) line = substr(line, 1, room)
-        print pre line "…"
+        print pre line "..."
       } else if (line != "") print pre line
     }'
 }

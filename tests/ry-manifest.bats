@@ -52,7 +52,7 @@ longest_line() { awk '{ if (length > m) m = length } END { print m+0 }' <<<"$1";
   [ "$(longest_line "$output")" -le 80 ]
   # the front of the sentence survives, the cut is marked, the risk line follows
   [[ "$output" == *"  - DONE: recorded decision A as answered in docs/CURRENT.md, EDs become SAL"* ]]
-  grep -qE '^    .*…$' <<<"$output"
+  grep -qE '^    .*\.\.\.$' <<<"$output"
   [[ "$output" != *"once the week before"* ]]
   [[ "$output" == *$'\n  - risk: low — documentation only, no code or config touched\n'* ]]
 }
@@ -66,7 +66,7 @@ longest_line() { awk '{ if (length > m) m = length } END { print m+0 }' <<<"$1";
   [ "$(longest_line "$output")" -le 80 ]
   [ "$(grep -c 'xxxx' <<<"$output")" -eq 2 ]
   [[ "$output" == *"  - DONE: xxxx"* ]]
-  grep -qE '^    x+…$' <<<"$output"
+  grep -qE '^    x+\.\.\.$' <<<"$output"
 }
 
 @test "indentation stops at two levels: a row and its sub-bullets" {
@@ -120,7 +120,7 @@ longest_line() { awk '{ if (length > m) m = length } END { print m+0 }' <<<"$1";
   echo running > "$RY_HOME/state/$b.status"
   run ry-manifest.sh
   [ "$status" -eq 0 ]
-  [ "$(grep -E '^[a-z-]+$' <<<"$output" | paste -sd' ')" = "queued running turn-ended" ]
+  [ "$(grep -E '^[a-z-]+$' <<<"$output" | paste -sd' ' -)" = "queued running turn-ended" ]
 }
 
 @test "manifest lists queued tasks" {
